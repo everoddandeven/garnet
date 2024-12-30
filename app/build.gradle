@@ -143,7 +143,6 @@ android {
         abi {
             enable true
             reset()
-            include "x86_64", "arm64-v8a", "armeabi-v7a"
             universalApk true
         }
     }

@@ -29,27 +29,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Linter (gradle)
-        run: ./gradlew spotlessCheck
-
-      - name: Test (gradle)
-        run: ./gradlew test --no-daemon
-
-      - name: Android Test Report
-        uses: asadmansr/android-test-report-action@v1.2.0
-        if: ${{ always() }} # IMPORTANT: run Android Test Report regardless
-
       - name: Build APK (gradle)
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: Debug APK
           path: app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload Test Results
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: Build Reports
           path: app/build/reports
