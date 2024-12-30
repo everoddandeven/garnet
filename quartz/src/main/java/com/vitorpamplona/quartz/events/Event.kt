@@ -38,21 +38,11 @@ import com.vitorpamplona.quartz.crypto.CryptoUtils
 import com.vitorpamplona.quartz.encoders.ATag
 import com.vitorpamplona.quartz.encoders.Hex
 import com.vitorpamplona.quartz.encoders.HexKey
-import com.vitorpamplona.quartz.encoders.Nip01Serializer
 import com.vitorpamplona.quartz.encoders.Nip19Bech32
-import com.vitorpamplona.quartz.encoders.PoWRank
 import com.vitorpamplona.quartz.encoders.toHexKey
-import com.vitorpamplona.quartz.events.nip46.BunkerMessage
-import com.vitorpamplona.quartz.events.nip46.BunkerRequest
-import com.vitorpamplona.quartz.events.nip46.BunkerResponse
 import com.vitorpamplona.quartz.signers.NostrSigner
 import com.vitorpamplona.quartz.utils.TimeUtils
-import com.vitorpamplona.quartz.utils.bytesUsedInMemory
-import com.vitorpamplona.quartz.utils.pointerSizeInBytes
-import com.vitorpamplona.quartz.utils.remove
-import com.vitorpamplona.quartz.utils.startsWith
 import java.math.BigDecimal
-import java.security.MessageDigest
 
 @Immutable
 open class Event(
@@ -66,14 +56,14 @@ open class Event(
 ) : EventInterface {
     override fun isContentEncoded() = false
 
-    override fun countMemory(): Long =
-        7 * pointerSizeInBytes + // 7 fields, 4 bytes each reference (32bit)
-            12L + // createdAt + kind
+    override fun countMemory(): Long {
+        return 12L +
             id.bytesUsedInMemory() +
             pubKey.bytesUsedInMemory() +
-            tags.sumOf { pointerSizeInBytes + it.sumOf { pointerSizeInBytes + it.bytesUsedInMemory() } } +
+            tags.sumOf { it.sumOf { it.bytesUsedInMemory() } } +
             content.bytesUsedInMemory() +
             sig.bytesUsedInMemory()
+    }
 
     override fun id(): HexKey = id
 
@@ -95,56 +85,11 @@ open class Event(
 
     override fun hasTagWithContent(tagName: String) = tags.any { it.size > 1 && it[0] == tagName }
 
-    override fun forEachTaggedEvent(onEach: (eventId: HexKey) -> Unit) = forEachTagged("e", onEach)
-
-    override fun forEachHashTag(onEach: (eventId: HexKey) -> Unit) = forEachTagged("t", onEach)
-
-    private fun forEachTagged(
-        tagName: String,
-        onEach: (eventId: HexKey) -> Unit,
-    ) = tags.forEach {
-        if (it.size > 1 && it[0] == tagName) {
-            onEach(it[1])
-        }
-    }
-
-    override fun anyHashTag(onEach: (str: String) -> Boolean) = anyTagged("t", onEach)
-
-    private fun anyTagged(
-        tagName: String,
-        onEach: (str: String) -> Boolean,
-    ) = tags.any {
-        if (it.size > 1 && it[0] == tagName) {
-            onEach(it[1])
-        } else {
-            false
-        }
-    }
-
-    override fun <R> mapTaggedEvent(map: (eventId: HexKey) -> R) = mapTagged("e", map)
-
-    override fun <R> mapTaggedAddress(map: (address: String) -> R) = mapTagged("a", map)
-
-    private fun <R> mapTagged(
-        tagName: String,
-        map: (eventId: HexKey) -> R,
-    ) = tags.mapNotNull {
-        if (it.size > 1 && it[0] == tagName) {
-            map(it[1])
-        } else {
-            null
-        }
-    }
-
     override fun taggedUsers() = tags.filter { it.size > 1 && it[0] == "p" }.map { it[1] }
 
     override fun taggedEvents() = tags.filter { it.size > 1 && it[0] == "e" }.map { it[1] }
 
     override fun taggedUrls() = tags.filter { it.size > 1 && it[0] == "r" }.map { it[1] }
-
-    override fun firstTag(key: String) = tags.firstOrNull { it.size > 1 && it[0] == key }?.let { it[1] }
-
-    override fun firstTagFor(vararg key: String) = tags.firstOrNull { it.size > 1 && it[0] in key }?.let { it[1] }
 
     override fun firstTaggedUser() = tags.firstOrNull { it.size > 1 && it[0] == "p" }?.let { it[1] }
 
@@ -168,8 +113,9 @@ open class Event(
 
     override fun isSensitive() =
         tags.any {
-            (it.size > 0 && it[0] == "content-warning") ||
-                (it.size > 1 && it[0] == "t" && (it[1].equals("nsfw", true) || it[1].equals("nude", true)))
+            (it.size > 0 && it[0].equals("content-warning", true)) ||
+                (it.size > 1 && it[0] == "t" && it[1].equals("nsfw", true)) ||
+                (it.size > 1 && it[0] == "t" && it[1].equals("nude", true))
         }
 
     override fun subject() = tags.firstOrNull { it.size > 1 && it[0] == "subject" }?.get(1)
@@ -178,8 +124,10 @@ open class Event(
 
     override fun hasZapSplitSetup() = tags.any { it.size > 1 && it[0] == "zap" }
 
-    override fun zapSplitSetup(): List<ZapSplitSetup> =
-        tags
+    override fun hasTipSplitSetup() = tags.any { it.size > 1 && it[0] == "monero" }
+
+    override fun zapSplitSetup(): List<ZapSplitSetup> {
+        return tags
             .filter { it.size > 1 && it[0] == "zap" }
             .mapNotNull {
                 val isLnAddress = it[0].contains("@") || it[0].startsWith("LNURL", true)
@@ -196,6 +144,48 @@ open class Event(
                     null
                 }
             }
+    }
+
+    override fun tipSplitSetup(): List<TipSplitSetup> {
+        var tipSplitSetup =
+            tags
+                .filter { it.size > 1 && it[0] == "monero" }
+                .mapNotNull {
+                    val isAddress = it[1].length == 95
+                    var relay: String? = null
+                    var weight: Double? = null
+
+                    if (isAddress) {
+                        val weightString = it.getOrNull(2)
+                        if (weightString != null) {
+                            weight = weightString.toDoubleOrNull() ?: 0.0
+                        }
+                    } else {
+                        relay = it.getOrNull(2)
+                        val weightString = it.getOrNull(3)
+                        if (weightString != null) {
+                            weight = weightString.toDoubleOrNull() ?: 0.0
+                        }
+                    }
+
+                    if ((weight == null || weight > 0) && (isAddress || relay != null)) {
+                        TipSplitSetup(
+                            it[1],
+                            relay,
+                            weight,
+                            isAddress,
+                        )
+                    } else {
+                        null
+                    }
+                }
+
+        if (tipSplitSetup.any { it.weight != null }) {
+            tipSplitSetup = tipSplitSetup.filter { it.weight != null }
+        }
+
+        return tipSplitSetup
+    }
 
     override fun taggedAddresses() =
         tags
@@ -277,44 +267,53 @@ open class Event(
     }
 
     override fun getPoWRank(): Int {
-        val commitedPoW = tags.firstOrNull { it.size > 2 && it[0] == "nonce" }?.get(2)?.toIntOrNull()
-        return PoWRank.getCommited(id, commitedPoW)
+        var rank = 0
+        for (i in 0..id.length) {
+            if (id[i] == '0') {
+                rank += 4
+            } else if (id[i] in '4'..'7') {
+                rank += 1
+                break
+            } else if (id[i] in '2'..'3') {
+                rank += 2
+                break
+            } else if (id[i] == '1') {
+                rank += 3
+                break
+            } else {
+                break
+            }
+        }
+        return rank
     }
 
-    override fun getGeoHash(): String? =
-        tags
-            .filter { it.size > 1 && it[0] == "g" }
-            .maxByOrNull {
-                it[1].length
-            }?.get(1)
-            ?.ifBlank { null }
+    override fun getGeoHash(): String? {
+        return tags.firstOrNull { it.size > 1 && it[0] == "g" }?.get(1)?.ifBlank { null }
+    }
 
-    override fun getReward(): BigDecimal? =
-        try {
+    override fun getReward(): BigDecimal? {
+        return try {
             tags.firstOrNull { it.size > 1 && it[0] == "reward" }?.get(1)?.let { BigDecimal(it) }
         } catch (e: Exception) {
             null
         }
+    }
 
-    fun filterTags(startsWith: Array<String>) = tags.remove(startsWith)
-
-    open fun toNIP19(): String =
-        if (this is AddressableEvent) {
+    open fun toNIP19(): String {
+        return if (this is AddressableEvent) {
             ATag(kind, pubKey, dTag(), null).toNAddr()
         } else {
             Nip19Bech32.createNEvent(id, pubKey, kind, null)
         }
+    }
 
-    fun toNostrUri(): String = "nostr:${toNIP19()}"
+    fun toNostrUri(): String {
+        return "nostr:${toNIP19()}"
+    }
 
     fun hasCorrectIDHash(): Boolean {
         if (id.isEmpty()) return false
         return id.equals(generateId())
-    }
-
-    fun hasCorrectIDHash2(): Boolean {
-        if (id.isEmpty()) return false
-        return id.equals(generateId2())
     }
 
     fun hasVerifiedSignature(): Boolean {
@@ -331,7 +330,8 @@ open class Event(
                 |  Event: ${toJson()}
                 |  Actual ID: $id
                 |  Generated: ${generateId()}
-                """.trimIndent(),
+                """
+                    .trimIndent(),
             )
         }
         if (!hasVerifiedSignature()) {
@@ -339,29 +339,30 @@ open class Event(
         }
     }
 
-    override fun hasValidSignature(): Boolean =
-        try {
+    override fun hasValidSignature(): Boolean {
+        return try {
             hasCorrectIDHash() && hasVerifiedSignature()
         } catch (e: Exception) {
             Log.w("Event", "Event $id does not have a valid signature: ${toJson()}", e)
             false
         }
+    }
 
-    fun makeJsonForId(): String = makeJsonForId(pubKey, createdAt, kind, tags, content)
+    fun makeJsonForId(): String {
+        return makeJsonForId(pubKey, createdAt, kind, tags, content)
+    }
 
-    fun generateId(): String = CryptoUtils.sha256(makeJsonForId().toByteArray()).toHexKey()
-
-    fun generateId2(): String {
-        val sha256 = MessageDigest.getInstance("SHA-256")
-        Nip01Serializer().serializeEventInto(this, Nip01Serializer.BufferedDigestWriter(sha256))
-        return sha256.digest().toHexKey()
+    private fun generateId(): String {
+        return CryptoUtils.sha256(makeJsonForId().toByteArray()).toHexKey()
     }
 
     private class EventDeserializer : StdDeserializer<Event>(Event::class.java) {
         override fun deserialize(
             jp: JsonParser,
             ctxt: DeserializationContext,
-        ): Event = fromJson(jp.codec.readTree<JsonNode>(jp))
+        ): Event {
+            return fromJson(jp.codec.readTree(jp))
+        }
     }
 
     private class GossipDeserializer : StdDeserializer<Gossip>(Gossip::class.java) {
@@ -460,16 +461,11 @@ open class Event(
                         .addSerializer(Gossip::class.java, GossipSerializer())
                         .addDeserializer(Gossip::class.java, GossipDeserializer())
                         .addDeserializer(Response::class.java, ResponseDeserializer())
-                        .addDeserializer(Request::class.java, RequestDeserializer())
-                        .addDeserializer(BunkerMessage::class.java, BunkerMessage.BunkerMessageDeserializer())
-                        .addSerializer(BunkerRequest::class.java, BunkerRequest.BunkerRequestSerializer())
-                        .addDeserializer(BunkerRequest::class.java, BunkerRequest.BunkerRequestDeserializer())
-                        .addSerializer(BunkerResponse::class.java, BunkerResponse.BunkerResponseSerializer())
-                        .addDeserializer(BunkerResponse::class.java, BunkerResponse.BunkerResponseDeserializer()),
+                        .addDeserializer(Request::class.java, RequestDeserializer()),
                 )
 
-        fun fromJson(jsonObject: JsonNode): Event =
-            EventFactory.create(
+        fun fromJson(jsonObject: JsonNode): Event {
+            return EventFactory.create(
                 id = jsonObject.get("id").asText().intern(),
                 pubKey = jsonObject.get("pubkey").asText().intern(),
                 createdAt = jsonObject.get("created_at").asLong(),
@@ -481,8 +477,11 @@ open class Event(
                 content = jsonObject.get("content").asText(),
                 sig = jsonObject.get("sig").asText(),
             )
+        }
 
-        inline fun <reified R> JsonNode.toTypedArray(transform: (JsonNode) -> R): Array<R> = Array(size()) { transform(get(it)) }
+        private inline fun <reified R> JsonNode.toTypedArray(transform: (JsonNode) -> R): Array<R> {
+            return Array(size()) { transform(get(it)) }
+        }
 
         fun fromJson(json: String): Event = mapper.readValue(json, Event::class.java)
 
@@ -523,7 +522,9 @@ open class Event(
             kind: Int,
             tags: Array<Array<String>>,
             content: String,
-        ): ByteArray = CryptoUtils.sha256(makeJsonForId(pubKey, createdAt, kind, tags, content).toByteArray())
+        ): ByteArray {
+            return CryptoUtils.sha256(makeJsonForId(pubKey, createdAt, kind, tags, content).toByteArray())
+        }
 
         fun create(
             signer: NostrSigner,
@@ -532,7 +533,9 @@ open class Event(
             content: String = "",
             createdAt: Long = TimeUtils.now(),
             onReady: (Event) -> Unit,
-        ) = signer.sign(createdAt, kind, tags, content, onReady)
+        ) {
+            return signer.sign(createdAt, kind, tags, content, onReady)
+        }
     }
 }
 
@@ -546,20 +549,14 @@ open class WrappedEvent(
     content: String,
     sig: HexKey,
 ) : Event(id, pubKey, createdAt, kind, tags, content, sig) {
-    @Transient var host: HostStub? = null // host event to broadcast when needed
+    @Transient var host: Event? = null // host event to broadcast when needed
 }
-
-class HostStub(
-    val id: HexKey,
-    val pubKey: HexKey,
-    val kind: Int,
-)
 
 @Immutable
 interface AddressableEvent {
     fun dTag(): String
 
-    fun address(relayHint: String? = null): ATag
+    fun address(): ATag
 
     fun addressTag(): String
 }
@@ -573,16 +570,19 @@ open class BaseAddressableEvent(
     tags: Array<Array<String>>,
     content: String,
     sig: HexKey,
-) : Event(id, pubKey, createdAt, kind, tags, content, sig),
-    AddressableEvent {
+) : Event(id, pubKey, createdAt, kind, tags, content, sig), AddressableEvent {
     override fun dTag() = tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: ""
 
-    override fun address(relayHint: String?) = ATag(kind, pubKey, dTag(), relayHint)
+    override fun address() = ATag(kind, pubKey, dTag(), null)
 
     /**
      * Creates the tag in a memory effecient way (without creating the ATag class
      */
     override fun addressTag() = ATag.assembleATag(kind, pubKey, dTag())
+}
+
+fun String.bytesUsedInMemory(): Int {
+    return (8 * ((((this.length) * 2) + 45) / 8))
 }
 
 data class ZapSplitSetup(
@@ -592,4 +592,9 @@ data class ZapSplitSetup(
     val isLnAddress: Boolean,
 )
 
-interface RootScope
+data class TipSplitSetup(
+    val addressOrPubKeyHex: String,
+    val relay: String?,
+    val weight: Double?,
+    val isAddress: Boolean,
+)

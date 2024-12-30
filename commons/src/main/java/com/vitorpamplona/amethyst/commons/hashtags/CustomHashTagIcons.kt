@@ -23,11 +23,11 @@ package com.vitorpamplona.amethyst.commons.hashtags
 import androidx.compose.ui.graphics.vector.ImageVector
 import kotlin.collections.List as ____KtList
 
-object CustomHashTagIcons
+public object CustomHashTagIcons
 
 private var customHashTagIconsAllIconsCache: ____KtList<ImageVector>? = null
 
-val CustomHashTagIcons.AllIcons: ____KtList<ImageVector>
+public val CustomHashTagIcons.AllIcons: ____KtList<ImageVector>
     get() {
         if (customHashTagIconsAllIconsCache != null) {
             return customHashTagIconsAllIconsCache!!
@@ -47,7 +47,6 @@ val CustomHashTagIcons.AllIcons: ____KtList<ImageVector>
                 Zap,
                 Tunestr,
                 Nostr,
-                Gamestr,
             )
         return customHashTagIconsAllIconsCache!!
     }

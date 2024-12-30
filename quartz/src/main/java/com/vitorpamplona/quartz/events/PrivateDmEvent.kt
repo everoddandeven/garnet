@@ -24,12 +24,9 @@ import androidx.compose.runtime.Immutable
 import com.vitorpamplona.quartz.encoders.Hex
 import com.vitorpamplona.quartz.encoders.HexKey
 import com.vitorpamplona.quartz.encoders.HexValidator
-import com.vitorpamplona.quartz.encoders.IMetaTag
 import com.vitorpamplona.quartz.encoders.Nip54InlineMetadata
 import com.vitorpamplona.quartz.signers.NostrSigner
 import com.vitorpamplona.quartz.utils.TimeUtils
-import com.vitorpamplona.quartz.utils.bytesUsedInMemory
-import com.vitorpamplona.quartz.utils.pointerSizeInBytes
 import kotlinx.collections.immutable.persistentSetOf
 
 @Immutable
@@ -40,13 +37,8 @@ class PrivateDmEvent(
     tags: Array<Array<String>>,
     content: String,
     sig: HexKey,
-) : Event(id, pubKey, createdAt, KIND, tags, content, sig),
-    ChatroomKeyable {
+) : Event(id, pubKey, createdAt, KIND, tags, content, sig), ChatroomKeyable {
     @Transient private var decryptedContent: Map<HexKey, String> = mapOf()
-
-    override fun countMemory(): Long =
-        super.countMemory() +
-            pointerSizeInBytes + (decryptedContent.values.sumOf { pointerSizeInBytes + it.bytesUsedInMemory() })
 
     override fun isContentEncoded() = true
 
@@ -68,9 +60,13 @@ class PrivateDmEvent(
         }
     }
 
-    fun talkingWith(oneSideHex: String): HexKey = if (pubKey == oneSideHex) verifiedRecipientPubKey() ?: pubKey else pubKey
+    fun talkingWith(oneSideHex: String): HexKey {
+        return if (pubKey == oneSideHex) verifiedRecipientPubKey() ?: pubKey else pubKey
+    }
 
-    override fun chatroomKey(toRemove: String): ChatroomKey = ChatroomKey(persistentSetOf(talkingWith(toRemove)))
+    override fun chatroomKey(toRemove: String): ChatroomKey {
+        return ChatroomKey(persistentSetOf(talkingWith(toRemove)))
+    }
 
     /**
      * To be fully compatible with nip-04, we read e-tags that are in violation to nip-18.
@@ -80,9 +76,13 @@ class PrivateDmEvent(
      */
     fun replyTo() = tags.firstOrNull { it.size > 1 && it[0] == "e" }?.get(1)
 
-    fun with(pubkeyHex: String): Boolean = pubkeyHex == pubKey || tags.any { it.size > 1 && it[0] == "p" && it[1] == pubkeyHex }
+    fun with(pubkeyHex: String): Boolean {
+        return pubkeyHex == pubKey || tags.any { it.size > 1 && it[0] == "p" && it[1] == pubkeyHex }
+    }
 
-    fun cachedContentFor(signer: NostrSigner): String? = decryptedContent[signer.pubKey]
+    fun cachedContentFor(signer: NostrSigner): String? {
+        return decryptedContent[signer.pubKey]
+    }
 
     fun plainContent(
         signer: NostrSigner,
@@ -93,7 +93,7 @@ class PrivateDmEvent(
             return
         }
 
-        signer.decrypt(content, talkingWith(signer.pubKey)) { retVal ->
+        signer.nip04Decrypt(content, talkingWith(signer.pubKey)) { retVal ->
             val content =
                 if (retVal.startsWith(NIP_18_ADVERTISEMENT)) {
                     retVal.substring(16)
@@ -124,14 +124,18 @@ class PrivateDmEvent(
             advertiseNip18: Boolean = true,
             markAsSensitive: Boolean,
             zapRaiserAmount: Long?,
+            tipReceiver: List<TipSplitSetup>? = null,
             geohash: String? = null,
-            imetas: List<IMetaTag>? = null,
+            nip94attachments: List<FileHeaderEvent>? = null,
             isDraft: Boolean,
             onReady: (PrivateDmEvent) -> Unit,
         ) {
             var message = msg
-            imetas?.forEach {
-                message = message.replace(it.url, Nip54InlineMetadata().createUrl(it.url, it.properties))
+            nip94attachments?.forEach {
+                val myUrl = it.url()
+                if (myUrl != null) {
+                    message = message.replace(myUrl, Nip54InlineMetadata().createUrl(myUrl, it.tags))
+                }
             }
 
             message =
@@ -152,12 +156,22 @@ class PrivateDmEvent(
                 tags.add(arrayOf("content-warning", ""))
             }
             zapRaiserAmount?.let { tags.add(arrayOf("zapraiser", "$it")) }
+            tipReceiver?.forEach {
+                if (it.isAddress) {
+                    tags.add(arrayOf("monero", it.addressOrPubKeyHex, it.weight.toString()))
+                } else {
+                    tags.add(arrayOf("monero", it.addressOrPubKeyHex, it.relay ?: "", it.weight.toString()))
+                }
+            }
             geohash?.let { tags.addAll(geohashMipMap(it)) }
             /* Privacy issue: DO NOT ADD THESE TO THE TAGS.
-            imetas?.forEach {
-                tags.add(Nip92MediaAttachments.createTag(it))
-            }
-             */
+            nip94attachments?.let {
+                it.forEach {
+                    Nip92().convertFromFileHeader(it)?.let {
+                        tags.add(it)
+                    }
+                }
+            }*/
 
             tags.add(arrayOf("alt", ALT))
 
@@ -172,10 +186,11 @@ class PrivateDmEvent(
     }
 }
 
-fun geohashMipMap(geohash: String): Array<Array<String>> =
-    geohash.indices
+fun geohashMipMap(geohash: String): Array<Array<String>> {
+    return geohash.indices
         .asSequence()
         .map { arrayOf("g", geohash.substring(0, it + 1)) }
         .toList()
         .reversed()
         .toTypedArray()
+}

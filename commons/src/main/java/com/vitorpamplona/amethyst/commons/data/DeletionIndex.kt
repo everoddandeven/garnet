@@ -26,10 +26,7 @@ import com.vitorpamplona.quartz.events.DeletionEvent
 import com.vitorpamplona.quartz.events.Event
 
 class DeletionIndex {
-    data class DeletionRequest(
-        val reference: String,
-        val publicKey: HexKey,
-    ) : Comparable<DeletionRequest> {
+    data class DeletionRequest(val reference: String, val publicKey: HexKey) : Comparable<DeletionRequest> {
         override fun compareTo(other: DeletionRequest): Int {
             val compared = reference.compareTo(other.reference)
 
@@ -43,14 +40,14 @@ class DeletionIndex {
 
     // stores a set of id OR atags (kind:pubkey:dtag) by pubkey with the created at of the deletion event.
     // Anything newer than the date should not be deleted.
-    private val deletedReferencesBefore = LargeCache<DeletionRequest, DeletionEvent>()
+    private val deletedReferencesBefore = LargeCache<DeletionRequest, Long>()
 
     fun add(event: DeletionEvent): Boolean {
         var atLeastOne = false
 
         event.tags.forEach {
             if (it.size > 1 && (it[0] == "a" || it[0] == "e")) {
-                if (add(it[1], event.pubKey, event)) {
+                if (add(it[1], event.pubKey, event.createdAt)) {
                     atLeastOne = true
                 }
             }
@@ -62,32 +59,16 @@ class DeletionIndex {
     private fun add(
         ref: String,
         byPubKey: HexKey,
-        deletionEvent: DeletionEvent,
+        createdAt: Long,
     ): Boolean {
         val key = DeletionRequest(ref, byPubKey)
-        val previousDeletionEvent = deletedReferencesBefore.get(key)
+        val previousDeletionTime = deletedReferencesBefore.get(key)
 
-        if (previousDeletionEvent == null || deletionEvent.createdAt > previousDeletionEvent.createdAt) {
-            deletedReferencesBefore.put(key, deletionEvent)
+        if (previousDeletionTime == null || createdAt > previousDeletionTime) {
+            deletedReferencesBefore.put(key, createdAt)
             return true
         }
         return false
-    }
-
-    fun hasBeenDeletedBy(event: Event): DeletionEvent? {
-        deletedReferencesBefore.get(DeletionRequest(event.id, event.pubKey))?.let {
-            return it
-        }
-
-        if (event is AddressableEvent) {
-            deletedReferencesBefore.get(DeletionRequest(event.addressTag(), event.pubKey))?.let {
-                if (event.createdAt <= it.createdAt) {
-                    return it
-                }
-            }
-        }
-
-        return null
     }
 
     fun hasBeenDeleted(event: Event): Boolean {
@@ -107,9 +88,7 @@ class DeletionIndex {
         key: DeletionRequest,
         createdAt: Long,
     ): Boolean {
-        val deletionEvent = deletedReferencesBefore.get(key)
-        return deletionEvent != null && createdAt <= deletionEvent.createdAt
+        val deletionTime = deletedReferencesBefore.get(key)
+        return deletionTime != null && createdAt <= deletionTime
     }
-
-    fun size() = deletedReferencesBefore.size()
 }

@@ -20,7 +20,9 @@
  */
 package com.vitorpamplona.quartz.events
 
+import android.util.Log
 import androidx.compose.runtime.Immutable
+import com.fasterxml.jackson.module.kotlin.readValue
 import com.vitorpamplona.quartz.encoders.ATag
 import com.vitorpamplona.quartz.encoders.HexKey
 import com.vitorpamplona.quartz.signers.NostrSigner
@@ -37,7 +39,11 @@ abstract class GeneralListEvent(
     tags: Array<Array<String>>,
     content: String,
     sig: HexKey,
-) : PrivateTagArrayEvent(id, pubKey, createdAt, kind, tags, content, sig) {
+) : BaseAddressableEvent(id, pubKey, createdAt, kind, tags, content, sig) {
+    @Transient private var privateTagsCache: Array<Array<String>>? = null
+
+    override fun isContentEncoded() = true
+
     fun category() = dTag()
 
     fun bookmarkedPosts() = taggedEvents()
@@ -48,7 +54,11 @@ abstract class GeneralListEvent(
 
     fun title() = tags.firstOrNull { it.size > 1 && it[0] == "title" }?.get(1)
 
-    fun nameOrTitle() = name()?.ifBlank { null } ?: title()?.ifBlank { null }
+    fun nameOrTitle() = name() ?: title()
+
+    fun cachedPrivateTags(): Array<Array<String>>? {
+        return privateTagsCache
+    }
 
     fun filterTagList(
         key: String,
@@ -69,14 +79,40 @@ abstract class GeneralListEvent(
         isPrivate: Boolean,
         signer: NostrSigner,
         onReady: (Boolean) -> Unit,
-    ) = if (isPrivate) {
-        privateTagsOrEmpty(signer = signer) {
-            onReady(
-                it.any { it.size > 1 && it[0] == key && it[1] == tag },
-            )
+    ) {
+        return if (isPrivate) {
+            privateTagsOrEmpty(signer = signer) {
+                onReady(
+                    it.any { it.size > 1 && it[0] == key && it[1] == tag },
+                )
+            }
+        } else {
+            onReady(isTagged(key, tag))
         }
-    } else {
-        onReady(isTagged(key, tag))
+    }
+
+    fun privateTags(
+        signer: NostrSigner,
+        onReady: (Array<Array<String>>) -> Unit,
+    ) {
+        if (content.isEmpty()) {
+            onReady(emptyArray())
+            return
+        }
+
+        privateTagsCache?.let {
+            onReady(it)
+            return
+        }
+
+        try {
+            signer.nip04Decrypt(content, pubKey) {
+                privateTagsCache = mapper.readValue<Array<Array<String>>>(it)
+                privateTagsCache?.let { onReady(it) }
+            }
+        } catch (e: Throwable) {
+            Log.w("GeneralList", "Error parsing the JSON ${e.message}")
+        }
     }
 
     fun privateTagsOrEmpty(
@@ -111,16 +147,24 @@ abstract class GeneralListEvent(
         onReady: (List<ATag>) -> Unit,
     ) = privateTags(signer) { onReady(filterAddresses(it)) }
 
-    fun filterUsers(tags: Array<Array<String>>): List<String> = tags.filter { it.size > 1 && it[0] == "p" }.map { it[1] }
+    fun filterUsers(tags: Array<Array<String>>): List<String> {
+        return tags.filter { it.size > 1 && it[0] == "p" }.map { it[1] }
+    }
 
-    fun filterHashtags(tags: Array<Array<String>>): List<String> = tags.filter { it.size > 1 && it[0] == "t" }.map { it[1] }
+    fun filterHashtags(tags: Array<Array<String>>): List<String> {
+        return tags.filter { it.size > 1 && it[0] == "t" }.map { it[1] }
+    }
 
-    fun filterGeohashes(tags: Array<Array<String>>): List<String> = tags.filter { it.size > 1 && it[0] == "g" }.map { it[1] }
+    fun filterGeohashes(tags: Array<Array<String>>): List<String> {
+        return tags.filter { it.size > 1 && it[0] == "g" }.map { it[1] }
+    }
 
-    fun filterEvents(tags: Array<Array<String>>): List<String> = tags.filter { it.size > 1 && it[0] == "e" }.map { it[1] }
+    fun filterEvents(tags: Array<Array<String>>): List<String> {
+        return tags.filter { it.size > 1 && it[0] == "e" }.map { it[1] }
+    }
 
-    fun filterAddresses(tags: Array<Array<String>>): List<ATag> =
-        tags
+    fun filterAddresses(tags: Array<Array<String>>): List<ATag> {
+        return tags
             .filter { it.firstOrNull() == "a" }
             .mapNotNull {
                 val aTagValue = it.getOrNull(1)
@@ -128,6 +172,7 @@ abstract class GeneralListEvent(
 
                 if (aTagValue != null) ATag.parse(aTagValue, relay) else null
             }
+    }
 
     companion object {
         fun createPrivateTags(

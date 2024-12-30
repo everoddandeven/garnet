@@ -39,20 +39,12 @@ object Nip19Bech32 {
         ADDRESS,
     }
 
-    enum class TlvTypes(
-        val id: Byte,
-    ) {
+    enum class TlvTypes(val id: Byte) {
         SPECIAL(0),
         RELAY(1),
         AUTHOR(2),
         KIND(3),
     }
-
-    val nip19PlusNip46regex =
-        Pattern.compile(
-            "(nostr:)?@?(nsec1|npub1|nevent1|naddr1|note1|nprofile1|nrelay1|nembed1|ncryptsec1)([qpzry9x8gf2tvdw0s3jn54khce6mua7l]+)([\\S]*)",
-            Pattern.CASE_INSENSITIVE,
-        )
 
     val nip19regex =
         Pattern.compile(
@@ -61,80 +53,33 @@ object Nip19Bech32 {
         )
 
     @Immutable
-    data class ParseReturn(
-        val entity: Entity,
-        val nip19raw: String,
-        val additionalChars: String? = null,
-    )
+    data class ParseReturn(val entity: Entity, val additionalChars: String? = null)
 
     interface Entity
 
     @Immutable
-    data class NSec(
-        val hex: String,
-    ) : Entity
+    data class NSec(val hex: String) : Entity
 
     @Immutable
-    data class NPub(
-        val hex: String,
-    ) : Entity
+    data class NPub(val hex: String) : Entity
 
     @Immutable
-    data class Note(
-        val hex: String,
-    ) : Entity
+    data class Note(val hex: String) : Entity
 
     @Immutable
-    data class NProfile(
-        val hex: String,
-        val relay: List<String>,
-    ) : Entity
+    data class NProfile(val hex: String, val relay: List<String>) : Entity
 
     @Immutable
-    data class NEvent(
-        val hex: String,
-        val relay: List<String>,
-        val author: String?,
-        val kind: Int?,
-    ) : Entity
+    data class NEvent(val hex: String, val relay: List<String>, val author: String?, val kind: Int?) : Entity
 
     @Immutable
-    data class NAddress(
-        val atag: String,
-        val relay: List<String>,
-        val author: String,
-        val kind: Int,
-    ) : Entity
+    data class NAddress(val atag: String, val relay: List<String>, val author: String, val kind: Int) : Entity
 
     @Immutable
-    data class NRelay(
-        val relay: List<String>,
-    ) : Entity
+    data class NRelay(val relay: List<String>) : Entity
 
     @Immutable
-    data class NEmbed(
-        val event: Event,
-    ) : Entity
-
-    fun tryParseAndClean(uri: String?): String? {
-        if (uri == null) return null
-
-        try {
-            val matcher = nip19PlusNip46regex.matcher(uri)
-            if (!matcher.find()) {
-                return null
-            }
-
-            val type = matcher.group(2) // npub1
-            val key = matcher.group(3) // bech32
-
-            return type + key
-        } catch (e: Throwable) {
-            Log.e("NIP19 Parser", "Issue trying to Decode NIP19 $uri: ${e.message}", e)
-        }
-
-        return null
-    }
+    data class NEmbed(val event: Event) : Entity
 
     fun uriToRoute(uri: String?): ParseReturn? {
         if (uri == null) return null
@@ -163,10 +108,9 @@ object Nip19Bech32 {
         type: String,
         key: String?,
         additionalChars: String?,
-    ): ParseReturn? =
-        try {
-            val nip19 = (type + key)
-            val bytes = nip19.bechToBytes()
+    ): ParseReturn? {
+        return try {
+            val bytes = (type + key).bechToBytes()
 
             when (type.lowercase()) {
                 "nsec1" -> nsec(bytes)
@@ -179,12 +123,13 @@ object Nip19Bech32 {
                 "nembed1" -> nembed(bytes)
                 else -> null
             }?.let {
-                ParseReturn(it, nip19, additionalChars)
+                ParseReturn(it, additionalChars)
             }
         } catch (e: Throwable) {
             Log.w("NIP19 Parser", "Issue trying to Decode NIP19 $key: ${e.message}", e)
             null
         }
+    }
 
     private fun nembed(bytes: ByteArray): NEmbed? {
         if (bytes.isEmpty()) return null
@@ -260,35 +205,21 @@ object Nip19Bech32 {
         author: String?,
         kind: Int?,
         relay: String?,
-    ): String =
-        TlvBuilder()
+    ): String {
+        return TlvBuilder()
             .apply {
                 addHex(TlvTypes.SPECIAL, idHex)
                 addStringIfNotNull(TlvTypes.RELAY, relay)
                 addHexIfNotNull(TlvTypes.AUTHOR, author)
                 addIntIfNotNull(TlvTypes.KIND, kind)
-            }.build()
+            }
+            .build()
             .toNEvent()
+    }
 
-    @Deprecated("Use nevent instead")
-    fun createNote(eventId: HexKey): String = eventId.hexToByteArray().toNote()
-
-    fun createNPub(authorPubKeyHex: HexKey): String = authorPubKeyHex.hexToByteArray().toNpub()
-
-    fun createNProfile(
-        authorPubKeyHex: String,
-        relay: List<String>,
-    ): String =
-        TlvBuilder()
-            .apply {
-                addHex(TlvTypes.SPECIAL, authorPubKeyHex)
-                relay.forEach {
-                    addStringIfNotNull(TlvTypes.RELAY, it)
-                }
-            }.build()
-            .toNProfile()
-
-    fun createNEmbed(event: Event): String = gzip(event.toJson()).toNEmbed()
+    fun createNEmbed(event: Event): String {
+        return gzip(event.toJson()).toNEmbed()
+    }
 
     fun gzip(content: String): ByteArray {
         val bos = ByteArrayOutputStream()
@@ -304,12 +235,9 @@ fun ByteArray.toNsec() = Bech32.encodeBytes(hrp = "nsec", this, Bech32.Encoding.
 
 fun ByteArray.toNpub() = Bech32.encodeBytes(hrp = "npub", this, Bech32.Encoding.Bech32)
 
-@Deprecated("Prefer nevent1 instead")
 fun ByteArray.toNote() = Bech32.encodeBytes(hrp = "note", this, Bech32.Encoding.Bech32)
 
 fun ByteArray.toNEvent() = Bech32.encodeBytes(hrp = "nevent", this, Bech32.Encoding.Bech32)
-
-fun ByteArray.toNProfile() = Bech32.encodeBytes(hrp = "nprofile", this, Bech32.Encoding.Bech32)
 
 fun ByteArray.toNAddress() = Bech32.encodeBytes(hrp = "naddr", this, Bech32.Encoding.Bech32)
 
@@ -317,16 +245,17 @@ fun ByteArray.toLnUrl() = Bech32.encodeBytes(hrp = "lnurl", this, Bech32.Encodin
 
 fun ByteArray.toNEmbed() = Bech32.encodeBytes(hrp = "nembed", this, Bech32.Encoding.Bech32)
 
-fun decodePublicKey(key: String): ByteArray =
-    when (val parsed = Nip19Bech32.uriToRoute(key)?.entity) {
+fun decodePublicKey(key: String): ByteArray {
+    return when (val parsed = Nip19Bech32.uriToRoute(key)?.entity) {
         is Nip19Bech32.NSec -> KeyPair(privKey = key.bechToBytes()).pubKey
         is Nip19Bech32.NPub -> parsed.hex.hexToByteArray()
         is Nip19Bech32.NProfile -> parsed.hex.hexToByteArray()
         else -> Hex.decode(key) // crashes on purpose
     }
+}
 
-fun decodePrivateKeyAsHexOrNull(key: String): HexKey? =
-    try {
+fun decodePrivateKeyAsHexOrNull(key: String): HexKey? {
+    return try {
         when (val parsed = Nip19Bech32.uriToRoute(key)?.entity) {
             is Nip19Bech32.NSec -> parsed.hex
             is Nip19Bech32.NPub -> null
@@ -342,9 +271,10 @@ fun decodePrivateKeyAsHexOrNull(key: String): HexKey? =
         if (e is CancellationException) throw e
         null
     }
+}
 
-fun decodePublicKeyAsHexOrNull(key: String): HexKey? =
-    try {
+fun decodePublicKeyAsHexOrNull(key: String): HexKey? {
+    return try {
         when (val parsed = Nip19Bech32.uriToRoute(key)?.entity) {
             is Nip19Bech32.NSec -> KeyPair(privKey = key.bechToBytes()).pubKey.toHexKey()
             is Nip19Bech32.NPub -> parsed.hex
@@ -360,9 +290,10 @@ fun decodePublicKeyAsHexOrNull(key: String): HexKey? =
         if (e is CancellationException) throw e
         null
     }
+}
 
-fun decodeEventIdAsHexOrNull(key: String): HexKey? =
-    try {
+fun decodeEventIdAsHexOrNull(key: String): HexKey? {
+    return try {
         when (val parsed = Nip19Bech32.uriToRoute(key)?.entity) {
             is Nip19Bech32.NSec -> null
             is Nip19Bech32.NPub -> null
@@ -378,6 +309,7 @@ fun decodeEventIdAsHexOrNull(key: String): HexKey? =
         if (e is CancellationException) throw e
         null
     }
+}
 
 fun TlvBuilder.addString(
     type: Nip19Bech32.TlvTypes,

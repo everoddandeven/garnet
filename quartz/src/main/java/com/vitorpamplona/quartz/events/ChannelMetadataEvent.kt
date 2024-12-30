@@ -34,8 +34,7 @@ class ChannelMetadataEvent(
     tags: Array<Array<String>>,
     content: String,
     sig: HexKey,
-) : Event(id, pubKey, createdAt, KIND, tags, content, sig),
-    IsInPublicChatChannel {
+) : Event(id, pubKey, createdAt, KIND, tags, content, sig), IsInPublicChatChannel {
     override fun channel() = tags.firstOrNull { it.size > 1 && it[0] == "e" }?.get(1)
 
     fun channelInfo() =

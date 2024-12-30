@@ -127,7 +127,8 @@ public val CustomHashTagIcons.Zap: ImageVector
                     curveToRelative(4.996f, -0.006f, 7.714f, -0.11f, 12.882f, -0.037f)
                     close()
                 }
-            }.build()
+            }
+                .build()
         return customHashTagIconsZap!!
     }
 

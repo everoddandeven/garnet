@@ -63,7 +63,6 @@
 -keep class com.vitorpamplona.quartz.events.** { *; }
 -keep class com.vitorpamplona.quartz.signers.** { *; }
 -keep class com.vitorpamplona.quartz.utils.** { *; }
--keep class com.vitorpamplona.quartz.ots.** { *; }
 
 -keep class com.vitorpamplona.amethyst.model.** { *; }
 -keep class com.vitorpamplona.amethyst.service.** { *; }

@@ -26,7 +26,6 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.vitorpamplona.quartz.encoders.HexKey
 import com.vitorpamplona.quartz.signers.NostrSigner
-import com.vitorpamplona.quartz.signers.NostrSignerSync
 import com.vitorpamplona.quartz.utils.TimeUtils
 import java.io.ByteArrayInputStream
 import java.io.StringWriter
@@ -46,7 +45,7 @@ abstract class IdentityClaim(
         fun create(
             platformIdentity: String,
             proof: String,
-        ): IdentityClaim {
+        ): IdentityClaim? {
             val (platform, identity) = platformIdentity.split(':')
 
             return when (platform.lowercase()) {
@@ -88,7 +87,7 @@ class TwitterIdentity(
     identity: String,
     proof: String,
 ) : IdentityClaim(identity, proof) {
-    override fun toProofUrl() = "https://x.com/$identity/status/$proof"
+    override fun toProofUrl() = "https://twitter.com/$identity/status/$proof"
 
     override fun platform() = platform
 
@@ -98,7 +97,7 @@ class TwitterIdentity(
         fun parseProofUrl(proofUrl: String): TwitterIdentity? {
             return try {
                 if (proofUrl.isBlank()) return null
-                val path = proofUrl.removePrefix("https://x.com/").split("?")[0].split("/")
+                val path = proofUrl.removePrefix("https://twitter.com/").split("?")[0].split("/")
 
                 TwitterIdentity(path[0], path[2])
             } catch (e: Exception) {
@@ -158,7 +157,7 @@ class MetadataEvent(
             mapper.readValue(content, UserMetadata::class.java)
         } catch (e: Exception) {
             // e.printStackTrace()
-            Log.w("MetadataEvent", "Content Parse Error: ${toNostrUri()} ${e.localizedMessage}")
+            Log.w("MT", "Content Parse Error: ${e.localizedMessage} $content")
             null
         }
 
@@ -167,7 +166,7 @@ class MetadataEvent(
             .filter { it.firstOrNull() == "i" }
             .mapNotNull {
                 try {
-                    IdentityClaim.create(it[1], it[2])
+                    IdentityClaim.create(it.get(1), it.get(2))
                 } catch (e: Exception) {
                     Log.e("MetadataEvent", "Can't parse identity [${it.joinToString { "," }}]", e)
                     null
@@ -176,27 +175,6 @@ class MetadataEvent(
 
     companion object {
         const val KIND = 0
-
-        fun newUser(
-            name: String?,
-            signer: NostrSignerSync,
-            createdAt: Long = TimeUtils.now(),
-        ): MetadataEvent? {
-            // Tries to not delete any existing attribute that we do not work with.
-            val currentJson = ObjectMapper().createObjectNode()
-
-            name?.let { addIfNotBlank(currentJson, "name", it.trim()) }
-            val writer = StringWriter()
-            ObjectMapper().writeValue(writer, currentJson)
-
-            val tags = mutableListOf<Array<String>>()
-
-            tags.add(
-                arrayOf("alt", "User profile for ${name ?: currentJson.get("name").asText() ?: ""}"),
-            )
-
-            return signer.sign(createdAt, KIND, tags.toTypedArray(), writer.buffer.toString())
-        }
 
         fun updateFromPast(
             latest: MetadataEvent?,
@@ -208,7 +186,7 @@ class MetadataEvent(
             nip05: String?,
             lnAddress: String?,
             lnURL: String?,
-            pronouns: String?,
+            moneroAddress: String?,
             twitter: String?,
             mastodon: String?,
             github: String?,
@@ -232,11 +210,24 @@ class MetadataEvent(
             picture?.let { addIfNotBlank(currentJson, "picture", it.trim()) }
             banner?.let { addIfNotBlank(currentJson, "banner", it.trim()) }
             website?.let { addIfNotBlank(currentJson, "website", it.trim()) }
-            pronouns?.let { addIfNotBlank(currentJson, "pronouns", it.trim()) }
             about?.let { addIfNotBlank(currentJson, "about", it.trim()) }
             nip05?.let { addIfNotBlank(currentJson, "nip05", it.trim()) }
             lnAddress?.let { addIfNotBlank(currentJson, "lud16", it.trim()) }
             lnURL?.let { addIfNotBlank(currentJson, "lud06", it.trim()) }
+            moneroAddress?.let {
+                val cryptos =
+                    if (currentJson.has("cryptocurrency_addresses")) {
+                        currentJson.get("cryptocurrency_addresses")
+                    } else {
+                        currentJson.putObject("cryptocurrency_addresses")
+                    } as ObjectNode
+
+                if (it.isBlank()) {
+                    cryptos.remove("monero")
+                } else {
+                    cryptos.put("monero", it)
+                }
+            }
 
             var claims = latest?.identityClaims() ?: emptyList()
 
@@ -283,11 +274,32 @@ class MetadataEvent(
             key: String,
             value: String,
         ) {
-            if (value.isBlank() || value == "null") {
+            if (value.isBlank()) {
                 currentJson.remove(key)
             } else {
                 currentJson.put(key, value.trim())
             }
+        }
+
+        fun createFromScratch(
+            newName: String,
+            signer: NostrSigner,
+            createdAt: Long = TimeUtils.now(),
+            onReady: (MetadataEvent) -> Unit,
+        ) {
+            val prop = ObjectMapper().createObjectNode()
+            prop.put("name", newName.trim())
+
+            val writer = StringWriter()
+            ObjectMapper().writeValue(writer, prop)
+
+            val tags = mutableListOf<Array<String>>()
+
+            tags.add(
+                arrayOf("alt", "User profile for $newName"),
+            )
+
+            signer.sign(createdAt, KIND, tags.toTypedArray(), writer.buffer.toString(), onReady)
         }
     }
 }

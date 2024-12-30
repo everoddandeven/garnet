@@ -22,12 +22,6 @@ package com.vitorpamplona.quartz.utils
 
 import kotlin.math.min
 
-val pointerSizeInBytes = 4
-
-fun String.bytesUsedInMemory(): Long = (8 * (((this.length * 2L) + 45) / 8))
-
-fun Boolean.bytesUsedInMemory(): Long = 8
-
 fun String.containsIgnoreCase(term: String): Boolean {
     if (term.isEmpty()) return true // Empty string is contained
 
@@ -74,7 +68,4 @@ fun String.containsAny(terms: List<DualCase>): Boolean {
     return terms.any { containsIgnoreCase(it.lowercase, it.uppercase) }
 }
 
-class DualCase(
-    val lowercase: String,
-    val uppercase: String,
-)
+class DualCase(val lowercase: String, val uppercase: String)

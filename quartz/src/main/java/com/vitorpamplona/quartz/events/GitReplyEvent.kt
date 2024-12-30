@@ -23,7 +23,6 @@ package com.vitorpamplona.quartz.events
 import androidx.compose.runtime.Immutable
 import com.vitorpamplona.quartz.encoders.ATag
 import com.vitorpamplona.quartz.encoders.HexKey
-import com.vitorpamplona.quartz.encoders.IMetaTag
 import com.vitorpamplona.quartz.encoders.Nip92MediaAttachments
 import com.vitorpamplona.quartz.signers.NostrSigner
 import com.vitorpamplona.quartz.utils.TimeUtils
@@ -87,11 +86,12 @@ class GitReplyEvent(
             zapReceiver: List<ZapSplitSetup>? = null,
             markAsSensitive: Boolean = false,
             zapRaiserAmount: Long? = null,
+            tipReceiver: List<TipSplitSetup>? = null,
             replyingTo: String? = null,
             root: String? = null,
             directMentions: Set<HexKey> = emptySet(),
             geohash: String? = null,
-            imetas: List<IMetaTag>? = null,
+            nip94attachments: List<FileHeaderEvent>? = null,
             forkedFrom: Event? = null,
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
@@ -148,9 +148,20 @@ class GitReplyEvent(
                 tags.add(arrayOf("content-warning", ""))
             }
             zapRaiserAmount?.let { tags.add(arrayOf("zapraiser", "$it")) }
+            tipReceiver?.forEach {
+                if (it.isAddress) {
+                    tags.add(arrayOf("monero", it.addressOrPubKeyHex, it.weight.toString()))
+                } else {
+                    tags.add(arrayOf("monero", it.addressOrPubKeyHex, it.relay ?: "", it.weight.toString()))
+                }
+            }
             geohash?.let { tags.addAll(geohashMipMap(it)) }
-            imetas?.forEach {
-                tags.add(Nip92MediaAttachments.createTag(it))
+            nip94attachments?.let {
+                it.forEach {
+                    Nip92MediaAttachments().convertFromFileHeader(it)?.let {
+                        tags.add(it)
+                    }
+                }
             }
             tags.add(arrayOf("alt", "a git issue reply"))
 

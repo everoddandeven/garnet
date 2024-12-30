@@ -46,7 +46,7 @@ class RichTextParserBenchmark {
     fun parseApkUrl() {
         benchmarkRule.measureRepeated {
             assertNull(
-                RichTextParser().createMediaContent(
+                RichTextParser().parseMediaUrl(
                     "https://github.com/vitorpamplona/amethyst/releases/download/v0.83.10/amethyst-googleplay-universal-v0.83.10.apk",
                     EmptyTagList,
                     null,
@@ -59,13 +59,10 @@ class RichTextParserBenchmark {
     fun parseImageUrl() {
         benchmarkRule.measureRepeated {
             assertTrue(
-                RichTextParser()
-                    .parseText(
-                        "first https://m.primal.net/HeKw.jpg second",
-                        EmptyTagList,
-                        null,
-                    ).paragraphs[0]
-                    .words[1] is ImageSegment,
+                RichTextParser().parseText(
+                    "first https://m.primal.net/HeKw.jpg second",
+                    EmptyTagList,
+                ).paragraphs[0].words[1] is ImageSegment,
             )
         }
     }
@@ -74,13 +71,10 @@ class RichTextParserBenchmark {
     fun parseNoSchemeUrl() {
         benchmarkRule.measureRepeated {
             assertTrue(
-                RichTextParser()
-                    .parseText(
-                        "first amethyst.social second",
-                        EmptyTagList,
-                        null,
-                    ).paragraphs[0]
-                    .words[1] is LinkSegment,
+                RichTextParser().parseText(
+                    "first amethyst.social second",
+                    EmptyTagList,
+                ).paragraphs[0].words[1] is LinkSegment,
             )
         }
     }
@@ -89,13 +83,10 @@ class RichTextParserBenchmark {
     fun parseHashtag() {
         benchmarkRule.measureRepeated {
             assertTrue(
-                RichTextParser()
-                    .parseText(
-                        "first #amethyst second",
-                        EmptyTagList,
-                        null,
-                    ).paragraphs[0]
-                    .words[1] is HashTagSegment,
+                RichTextParser().parseText(
+                    "first #amethyst second",
+                    EmptyTagList,
+                ).paragraphs[0].words[1] is HashTagSegment,
             )
         }
     }
@@ -103,14 +94,14 @@ class RichTextParserBenchmark {
     @Test
     fun computeTestCase1All() {
         benchmarkRule.measureRepeated {
-            RichTextParser().parseText(testCase1, EmptyTagList, null)
+            RichTextParser().parseText(testCase1, EmptyTagList)
         }
     }
 
     @Test
     fun computeTestCase2All() {
         benchmarkRule.measureRepeated {
-            RichTextParser().parseText(testCase2, EmptyTagList, null)
+            RichTextParser().parseText(testCase2, EmptyTagList)
         }
     }
 
@@ -138,14 +129,14 @@ class RichTextParserBenchmark {
     @Test
     fun computeTestCase3All() {
         benchmarkRule.measureRepeated {
-            RichTextParser().parseText(testCase3, EmptyTagList, null)
+            RichTextParser().parseText(testCase3, EmptyTagList)
         }
     }
 
     @Test
     fun computeTestCaseJapanese() {
         benchmarkRule.measureRepeated {
-            RichTextParser().parseText(testCaseJapanese, testCaseJapaneseTags, null)
+            RichTextParser().parseText(testCaseJapanese, testCaseJapaneseTags)
         }
     }
 

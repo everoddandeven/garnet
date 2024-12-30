@@ -25,10 +25,7 @@ import com.vitorpamplona.quartz.encoders.HexKey
 import com.vitorpamplona.quartz.signers.NostrSigner
 import com.vitorpamplona.quartz.utils.TimeUtils
 
-@Immutable data class ReportedKey(
-    val key: String,
-    val reportType: ReportEvent.ReportType,
-)
+@Immutable data class ReportedKey(val key: String, val reportType: ReportEvent.ReportType)
 
 // NIP 56 event.
 @Immutable
@@ -122,15 +119,13 @@ class ReportEvent(
         }
     }
 
-    enum class ReportType {
+    enum class ReportType() {
         EXPLICIT, // Not used anymore.
         ILLEGAL,
         SPAM,
         IMPERSONATION,
         NUDITY,
         PROFANITY,
-        MALWARE,
-        MOD,
         OTHER,
     }
 }

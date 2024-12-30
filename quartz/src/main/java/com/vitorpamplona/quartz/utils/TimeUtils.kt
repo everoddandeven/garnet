@@ -51,11 +51,7 @@ object TimeUtils {
 
     fun eightHoursAgo() = now() - EIGHT_HOURS
 
-    fun twoDays() = ONE_DAY * 2
-
     fun oneWeekAgo() = now() - ONE_WEEK
 
-    fun oneMonthAgo() = now() - ONE_MONTH
-
-    fun randomWithTwoDays() = System.currentTimeMillis() / 1000 - CryptoUtils.randomInt(twoDays())
+    fun randomWithinAWeek() = System.currentTimeMillis() / 1000 - CryptoUtils.randomInt(ONE_WEEK)
 }

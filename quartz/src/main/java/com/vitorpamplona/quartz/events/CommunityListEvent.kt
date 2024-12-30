@@ -25,7 +25,6 @@ import com.vitorpamplona.quartz.encoders.ATag
 import com.vitorpamplona.quartz.encoders.HexKey
 import com.vitorpamplona.quartz.signers.NostrSigner
 import com.vitorpamplona.quartz.utils.TimeUtils
-import com.vitorpamplona.quartz.utils.pointerSizeInBytes
 import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.toImmutableSet
 
@@ -39,10 +38,6 @@ class CommunityListEvent(
     sig: HexKey,
 ) : GeneralListEvent(id, pubKey, createdAt, KIND, tags, content, sig) {
     @Transient var publicAndPrivateEventCache: ImmutableSet<ATag>? = null
-
-    override fun countMemory(): Long =
-        super.countMemory() +
-            32 + (publicAndPrivateEventCache?.sumOf { pointerSizeInBytes + it.countMemory() } ?: 0L) // rough calculation
 
     override fun dTag() = FIXED_D_TAG
 
@@ -72,7 +67,9 @@ class CommunityListEvent(
         const val FIXED_D_TAG = ""
         const val ALT = "Community List"
 
-        fun blockListFor(pubKeyHex: HexKey): String = "$KIND:$pubKeyHex:"
+        fun blockListFor(pubKeyHex: HexKey): String {
+            return "$KIND:$pubKeyHex:"
+        }
 
         fun createListWithTag(
             key: String,
@@ -109,7 +106,9 @@ class CommunityListEvent(
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
             onReady: (CommunityListEvent) -> Unit,
-        ) = createListWithTag("a", address.toTag(), isPrivate, signer, createdAt, onReady)
+        ) {
+            return createListWithTag("a", address.toTag(), isPrivate, signer, createdAt, onReady)
+        }
 
         fun addEvents(
             earlierVersion: CommunityListEvent,
@@ -158,7 +157,9 @@ class CommunityListEvent(
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
             onReady: (CommunityListEvent) -> Unit,
-        ) = addTag(earlierVersion, "a", address.toTag(), isPrivate, signer, createdAt, onReady)
+        ) {
+            return addTag(earlierVersion, "a", address.toTag(), isPrivate, signer, createdAt, onReady)
+        }
 
         fun addTag(
             earlierVersion: CommunityListEvent,
@@ -206,7 +207,9 @@ class CommunityListEvent(
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
             onReady: (CommunityListEvent) -> Unit,
-        ) = removeTag(earlierVersion, "a", address.toTag(), isPrivate, signer, createdAt, onReady)
+        ) {
+            return removeTag(earlierVersion, "a", address.toTag(), isPrivate, signer, createdAt, onReady)
+        }
 
         fun removeTag(
             earlierVersion: CommunityListEvent,

@@ -40,13 +40,16 @@ class FileStorageEvent(
 
     fun type() = tags.firstOrNull { it.size > 1 && it[0] == TYPE }?.get(1)
 
-    fun decode(): ByteArray? =
-        try {
+    fun decryptKey() = tags.firstOrNull { it.size > 2 && it[0] == DECRYPT }?.let { AESGCM(it[1], it[2]) }
+
+    fun decode(): ByteArray? {
+        return try {
             Base64.getDecoder().decode(content)
         } catch (e: Exception) {
             Log.e("FileStorageEvent", "Unable to decode base 64 ${e.message} $content")
             null
         }
+    }
 
     companion object {
         const val KIND = 1064
@@ -55,7 +58,9 @@ class FileStorageEvent(
         private const val TYPE = "type"
         private const val DECRYPT = "decrypt"
 
-        fun encode(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)
+        fun encode(bytes: ByteArray): String {
+            return Base64.getEncoder().encodeToString(bytes)
+        }
 
         fun create(
             mimeType: String,

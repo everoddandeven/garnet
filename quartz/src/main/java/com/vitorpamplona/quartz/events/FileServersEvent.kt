@@ -21,7 +21,6 @@
 package com.vitorpamplona.quartz.events
 
 import androidx.compose.runtime.Immutable
-import com.vitorpamplona.quartz.encoders.ATag
 import com.vitorpamplona.quartz.encoders.HexKey
 import com.vitorpamplona.quartz.signers.NostrSigner
 import com.vitorpamplona.quartz.utils.TimeUtils
@@ -37,66 +36,24 @@ class FileServersEvent(
 ) : BaseAddressableEvent(id, pubKey, createdAt, KIND, tags, content, sig) {
     override fun dTag() = FIXED_D_TAG
 
-    fun servers(): List<String> =
-        tags.mapNotNull {
-            if (it.size > 1 && it[0] == "server") {
-                it[1]
-            } else {
-                null
-            }
-        }
-
     companion object {
         const val KIND = 10096
         const val FIXED_D_TAG = ""
         const val ALT = "File servers used by the author"
 
-        fun createAddressATag(pubKey: HexKey): ATag = ATag(KIND, pubKey, FIXED_D_TAG, null)
-
-        fun createAddressTag(pubKey: HexKey): String = ATag.assembleATag(KIND, pubKey, FIXED_D_TAG)
-
-        fun createTagArray(servers: List<String>): Array<Array<String>> =
-            servers
-                .map {
-                    arrayOf("server", it)
-                }.plusElement(arrayOf("alt", ALT))
-                .toTypedArray()
-
-        fun updateRelayList(
-            earlierVersion: FileServersEvent,
-            relays: List<String>,
-            signer: NostrSigner,
-            createdAt: Long = TimeUtils.now(),
-            onReady: (FileServersEvent) -> Unit,
-        ) {
-            val tags =
-                earlierVersion.tags
-                    .filter { it[0] != "server" }
-                    .plus(
-                        relays.map {
-                            arrayOf("server", it)
-                        },
-                    ).toTypedArray()
-
-            signer.sign(createdAt, KIND, tags, earlierVersion.content, onReady)
-        }
-
-        fun createFromScratch(
-            relays: List<String>,
-            signer: NostrSigner,
-            createdAt: Long = TimeUtils.now(),
-            onReady: (FileServersEvent) -> Unit,
-        ) {
-            create(relays, signer, createdAt, onReady)
-        }
-
         fun create(
-            servers: List<String>,
+            listOfServers: List<String>,
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
             onReady: (FileServersEvent) -> Unit,
         ) {
-            signer.sign(createdAt, KIND, createTagArray(servers), "", onReady)
+            val msg = ""
+            val tags = mutableListOf<Array<String>>()
+
+            listOfServers.forEach { tags.add(arrayOf("server", it)) }
+            tags.add(arrayOf("alt", ALT))
+
+            signer.sign(createdAt, KIND, tags.toTypedArray(), msg, onReady)
         }
     }
 }

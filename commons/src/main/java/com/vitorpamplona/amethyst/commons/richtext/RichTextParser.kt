@@ -24,7 +24,6 @@ import android.util.Log
 import android.util.Patterns
 import com.linkedin.urls.detection.UrlDetector
 import com.linkedin.urls.detection.UrlDetectorOptions
-import com.vitorpamplona.quartz.encoders.Dimension
 import com.vitorpamplona.quartz.encoders.Nip30CustomEmoji
 import com.vitorpamplona.quartz.encoders.Nip54InlineMetadata
 import com.vitorpamplona.quartz.encoders.Nip92MediaAttachments
@@ -42,63 +41,39 @@ import java.net.URL
 import java.util.regex.Pattern
 import kotlin.coroutines.cancellation.CancellationException
 
-class RichTextParser {
-    fun createMediaContent(
+class RichTextParser() {
+    fun parseMediaUrl(
         fullUrl: String,
         eventTags: ImmutableListOfLists<String>,
         description: String?,
-        callbackUri: String? = null,
     ): MediaUrlContent? {
-        val frags = Nip54InlineMetadata().parse(fullUrl)
-        val tags = Nip92MediaAttachments.parse(fullUrl, eventTags.lists)
+        val removedParamsFromUrl = removeQueryParamsForExtensionComparison(fullUrl)
+        return if (imageExtensions.any { removedParamsFromUrl.endsWith(it) }) {
+            val frags = Nip54InlineMetadata().parse(fullUrl)
+            val tags = Nip92MediaAttachments().parse(fullUrl, eventTags.lists)
 
-        val contentType = frags[FileHeaderEvent.MIME_TYPE] ?: tags[FileHeaderEvent.MIME_TYPE]
-
-        val isImage: Boolean
-        val isVideo: Boolean
-
-        if (contentType != null) {
-            isImage = contentType.startsWith("image/")
-            isVideo = contentType.startsWith("video/")
-        } else if (fullUrl.startsWith("data:")) {
-            isImage = fullUrl.startsWith("data:image/")
-            isVideo = fullUrl.startsWith("data:video/")
-        } else {
-            val removedParamsFromUrl = removeQueryParamsForExtensionComparison(fullUrl)
-            isImage = imageExtensions.any { removedParamsFromUrl.endsWith(it) }
-            isVideo = videoExtensions.any { removedParamsFromUrl.endsWith(it) }
-        }
-
-        return if (isImage) {
             MediaUrlImage(
                 url = fullUrl,
                 description = description ?: frags[FileHeaderEvent.ALT] ?: tags[FileHeaderEvent.ALT],
                 hash = frags[FileHeaderEvent.HASH] ?: tags[FileHeaderEvent.HASH],
                 blurhash = frags[FileHeaderEvent.BLUR_HASH] ?: tags[FileHeaderEvent.BLUR_HASH],
-                dim = frags[FileHeaderEvent.DIMENSION]?.let { Dimension.parse(it) } ?: tags[FileHeaderEvent.DIMENSION]?.let { Dimension.parse(it) },
+                dim = frags[FileHeaderEvent.DIMENSION] ?: tags[FileHeaderEvent.DIMENSION],
                 contentWarning = frags["content-warning"] ?: tags["content-warning"],
-                uri = callbackUri,
-                mimeType = contentType,
             )
-        } else if (isVideo) {
+        } else if (videoExtensions.any { removedParamsFromUrl.endsWith(it) }) {
+            val frags = Nip54InlineMetadata().parse(fullUrl)
+            val tags = Nip92MediaAttachments().parse(fullUrl, eventTags.lists)
             MediaUrlVideo(
                 url = fullUrl,
                 description = description ?: frags[FileHeaderEvent.ALT] ?: tags[FileHeaderEvent.ALT],
                 hash = frags[FileHeaderEvent.HASH] ?: tags[FileHeaderEvent.HASH],
                 blurhash = frags[FileHeaderEvent.BLUR_HASH] ?: tags[FileHeaderEvent.BLUR_HASH],
-                dim = frags[FileHeaderEvent.DIMENSION]?.let { Dimension.parse(it) } ?: tags[FileHeaderEvent.DIMENSION]?.let { Dimension.parse(it) },
+                dim = frags[FileHeaderEvent.DIMENSION] ?: tags[FileHeaderEvent.DIMENSION],
                 contentWarning = frags["content-warning"] ?: tags["content-warning"],
-                uri = callbackUri,
-                mimeType = contentType,
             )
         } else {
             null
         }
-    }
-
-    private fun checkBase64(content: String): Boolean {
-        val matcher = base64contentPattern.matcher(content)
-        return matcher.find()
     }
 
     fun parseValidUrls(content: String): LinkedHashSet<String> {
@@ -128,29 +103,21 @@ class RichTextParser {
     fun parseText(
         content: String,
         tags: ImmutableListOfLists<String>,
-        callbackUri: String?,
     ): RichTextViewerState {
         val urlSet = parseValidUrls(content)
 
         val imagesForPager =
-            urlSet.mapNotNull { fullUrl -> createMediaContent(fullUrl, tags, content, callbackUri) }.associateBy { it.url }
+            urlSet.mapNotNull { fullUrl -> parseMediaUrl(fullUrl, tags, content) }.associateBy { it.url }
+        val imageList = imagesForPager.values.toList()
 
         val emojiMap = Nip30CustomEmoji.createEmojiMap(tags)
 
         val segments = findTextSegments(content, imagesForPager.keys, urlSet, emojiMap, tags)
 
-        val base64Images = segments.map { it.words.filterIsInstance<Base64Segment>() }.flatten()
-
-        val imagesForPagerWithBase64 =
-            imagesForPager +
-                base64Images
-                    .mapNotNull { createMediaContent(it.segmentText, tags, content, callbackUri) }
-                    .associateBy { it.url }
-
         return RichTextViewerState(
             urlSet.toImmutableSet(),
-            imagesForPagerWithBase64.toImmutableMap(),
-            imagesForPagerWithBase64.values.toImmutableList(),
+            imagesForPager.toImmutableMap(),
+            imageList.toImmutableList(),
             emojiMap.toImmutableMap(),
             segments,
         )
@@ -195,14 +162,15 @@ class RichTextParser {
 
     private fun isNumber(word: String) = numberPattern.matcher(word).matches()
 
-    private fun isPhoneNumberChar(c: Char): Boolean =
-        when (c) {
+    private fun isPhoneNumberChar(c: Char): Boolean {
+        return when (c) {
             in '0'..'9' -> true
             '-' -> true
             ' ' -> true
             '.' -> true
             else -> false
         }
+    }
 
     fun isPotentialPhoneNumber(word: String): Boolean {
         if (word.length !in 7..14) return false
@@ -217,9 +185,13 @@ class RichTextParser {
         return isPotentialNumber
     }
 
-    fun isDate(word: String): Boolean = shortDatePattern.matcher(word).matches() || longDatePattern.matcher(word).matches()
+    fun isDate(word: String): Boolean {
+        return shortDatePattern.matcher(word).matches() || longDatePattern.matcher(word).matches()
+    }
 
-    private fun isArabic(text: String): Boolean = text.any { it in '\u0600'..'\u06FF' || it in '\u0750'..'\u077F' }
+    private fun isArabic(text: String): Boolean {
+        return text.any { it in '\u0600'..'\u06FF' || it in '\u0750'..'\u077F' }
+    }
 
     private fun wordIdentifier(
         word: String,
@@ -229,10 +201,6 @@ class RichTextParser {
         tags: ImmutableListOfLists<String>,
     ): Segment {
         if (word.isEmpty()) return RegularTextSegment(word)
-
-        if (word.startsWith("data:image/")) {
-            if (checkBase64(word)) return Base64Segment(word)
-        }
 
         if (images.contains(word)) return ImageSegment(word)
 
@@ -244,15 +212,15 @@ class RichTextParser {
 
         if (word.startsWith("lnurl", true)) return WithdrawSegment(word)
 
-        if (word.startsWith("cashuA", true) || word.startsWith("cashuB", true)) return CashuSegment(word)
+        if (word.startsWith("cashuA", true)) return CashuSegment(word)
+
+        if (startsWithNIP19Scheme(word)) return BechSegment(word)
 
         if (word.startsWith("#")) return parseHash(word, tags)
 
         if (word.contains("@")) {
             if (Patterns.EMAIL_ADDRESS.matcher(word).matches()) return EmailSegment(word)
         }
-
-        if (startsWithNIP19Scheme(word)) return BechSegment(word)
 
         if (isPotentialPhoneNumber(word) && !isDate(word)) {
             if (Patterns.PHONE.matcher(word).matches()) return PhoneSegment(word)
@@ -344,13 +312,8 @@ class RichTextParser {
             "^((http|https)://)?([A-Za-z0-9-_]+(\\.[A-Za-z0-9-_]+)+)(:[0-9]+)?(/[^?#]*)?(\\?[^#]*)?(#.*)?"
                 .toRegex(RegexOption.IGNORE_CASE)
 
-        val imageExt = listOf("png", "jpg", "gif", "bmp", "jpeg", "webp", "svg", "avif")
-        val videoExt = listOf("mp4", "avi", "wmv", "mpg", "amv", "webm", "mov", "mp3", "m3u8")
-
-        val imageExtensions = imageExt + imageExt.map { it.uppercase() }
-        val videoExtensions = videoExt + videoExt.map { it.uppercase() }
-
-        val base64contentPattern = Pattern.compile("data:image/(${imageExtensions.joinToString(separator = "|") { it } });base64,([a-zA-Z0-9+/]+={0,2})")
+        val imageExtensions = listOf("png", "jpg", "gif", "bmp", "jpeg", "webp", "svg")
+        val videoExtensions = listOf("mp4", "avi", "wmv", "mpg", "amv", "webm", "mov", "mp3", "m3u8")
 
         val tagIndex = Pattern.compile("\\#\\[([0-9]+)\\](.*)")
         val hashTagsPattern: Pattern =
@@ -362,14 +325,15 @@ class RichTextParser {
                     it.uppercase()
                 }
 
-        private fun removeQueryParamsForExtensionComparison(fullUrl: String): String =
-            if (fullUrl.contains("?")) {
+        private fun removeQueryParamsForExtensionComparison(fullUrl: String): String {
+            return if (fullUrl.contains("?")) {
                 fullUrl.split("?")[0].lowercase()
             } else if (fullUrl.contains("#")) {
                 fullUrl.split("#")[0].lowercase()
             } else {
                 fullUrl.lowercase()
             }
+        }
 
         fun isImageOrVideoUrl(url: String): Boolean {
             val removedParamsFromUrl = removeQueryParamsForExtensionComparison(url)
@@ -388,8 +352,8 @@ class RichTextParser {
             return videoExtensions.any { removedParamsFromUrl.endsWith(it) }
         }
 
-        fun isValidURL(url: String?): Boolean =
-            try {
+        fun isValidURL(url: String?): Boolean {
+            return try {
                 URL(url).toURI()
                 true
             } catch (e: MalformedURLException) {
@@ -397,6 +361,7 @@ class RichTextParser {
             } catch (e: URISyntaxException) {
                 false
             }
+        }
 
         fun parseImageOrVideo(fullUrl: String): BaseMediaContent {
             val removedParamsFromUrl = removeQueryParamsForExtensionComparison(fullUrl)

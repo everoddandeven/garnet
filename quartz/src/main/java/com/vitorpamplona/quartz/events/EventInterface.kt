@@ -107,6 +107,8 @@ interface EventInterface {
 
     fun zapSplitSetup(): List<ZapSplitSetup>
 
+    fun tipSplitSetup(): List<TipSplitSetup>
+
     fun isSensitive(): Boolean
 
     fun subject(): String?
@@ -117,16 +119,6 @@ interface EventInterface {
 
     fun hasTagWithContent(tagName: String): Boolean
 
-    fun forEachTaggedEvent(onEach: (eventId: HexKey) -> Unit)
-
-    fun forEachHashTag(onEach: (eventId: HexKey) -> Unit)
-
-    fun anyHashTag(onEach: (str: String) -> Boolean): Boolean
-
-    fun <R> mapTaggedEvent(map: (eventId: HexKey) -> R): List<R>
-
-    fun <R> mapTaggedAddress(map: (address: String) -> R): List<R>
-
     fun taggedAddresses(): List<ATag>
 
     fun taggedUsers(): List<HexKey>
@@ -134,10 +126,6 @@ interface EventInterface {
     fun taggedEvents(): List<HexKey>
 
     fun taggedUrls(): List<String>
-
-    fun firstTag(key: String): String?
-
-    fun firstTagFor(vararg key: String): String?
 
     fun firstTaggedAddress(): ATag?
 
@@ -158,4 +146,6 @@ interface EventInterface {
     fun isExpirationBefore(time: Long): Boolean
 
     fun hasZapSplitSetup(): Boolean
+
+    fun hasTipSplitSetup(): Boolean
 }

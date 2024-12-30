@@ -22,9 +22,7 @@ package com.vitorpamplona.amethyst.commons.preview
 
 import kotlinx.collections.immutable.toImmutableMap
 
-data class MetaTag(
-    private val attrs: Map<String, String>,
-) {
+data class MetaTag(private val attrs: Map<String, String>) {
     /**
      * Returns a value of an attribute specified by its name (case insensitive), or empty string if it doesn't exist.
      */
@@ -53,15 +51,9 @@ object MetaTagsParser {
             }
         }
 
-    private data class RawTag(
-        val isEnd: Boolean,
-        val name: String,
-        val attrPart: String,
-    )
+    private data class RawTag(val isEnd: Boolean, val name: String, val attrPart: String)
 
-    private class TagScanner(
-        private val input: String,
-    ) {
+    private class TagScanner(private val input: String) {
         private var p = 0
 
         fun exhausted(): Boolean = p >= input.length
@@ -138,7 +130,7 @@ object MetaTagsParser {
     // - commonly used character references in attribute values are resolved
     private class Attrs {
         companion object {
-            val RE_CHAR_REF = Regex("""&(#?)(\w+)(;?)""")
+            val RE_CHAR_REF = Regex("""&(\w+)(;?)""")
             val BASE_CHAR_REFS =
                 mapOf(
                     "amp" to "&",
@@ -149,9 +141,6 @@ object MetaTagsParser {
                     "LT" to "<",
                     "gt" to ">",
                     "GT" to ">",
-                    "nbsp" to " ",
-                    "NBSP" to " ",
-                    "middot" to "·",
                 )
             val CHAR_REFS =
                 mapOf(
@@ -159,29 +148,16 @@ object MetaTagsParser {
                     "equals" to "=",
                     "grave" to "`",
                     "DiacriticalGrave" to "`",
-                    "039" to "'",
-                    "8217" to "’",
-                    "8216" to "‘",
-                    "8220" to "“",
-                    "8230" to "…",
-                    "39" to "'",
-                    "ldquo" to "“",
-                    "rdquo" to "”",
-                    "mdash" to "—",
-                    "hellip" to "…",
-                    "x27" to "'",
-                    "nbsp" to " ",
-                    "x2d" to "-",
                 )
 
             fun replaceCharRefs(match: MatchResult): String {
-                val bcr = BASE_CHAR_REFS[match.groupValues[2]]
+                val bcr = BASE_CHAR_REFS[match.groupValues[1]]
                 if (bcr != null) {
                     return bcr
                 }
                 // non-base char refs must be terminated by ';'
-                if (match.groupValues[3].isNotEmpty()) {
-                    val cr = CHAR_REFS[match.groupValues[2]]
+                if (match.groupValues[2].isNotEmpty()) {
+                    val cr = CHAR_REFS[match.groupValues[1]]
                     if (cr != null) {
                         return cr
                     }
@@ -248,14 +224,7 @@ object MetaTagsParser {
                         }
 
                         c.isWhitespace() -> {}
-
-                        else -> {
-                            // if it is expecting = but gets another name, starts another property
-                            runCatching { attrs.add(Pair(input.slice(nameBegin..<nameEnd), "")) }
-
-                            nameBegin = i
-                            state = State.NAME
-                        }
+                        else -> return null
                     }
                 }
 

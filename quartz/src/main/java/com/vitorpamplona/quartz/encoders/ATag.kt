@@ -22,49 +22,22 @@ package com.vitorpamplona.quartz.encoders
 
 import android.util.Log
 import androidx.compose.runtime.Immutable
-import com.vitorpamplona.quartz.utils.bytesUsedInMemory
-import com.vitorpamplona.quartz.utils.pointerSizeInBytes
-import com.vitorpamplona.quartz.utils.removeTrailingNullsAndEmptyOthers
 
 @Immutable
-data class ATag(
-    val kind: Int,
-    val pubKeyHex: String,
-    val dTag: String,
-) {
-    var relay: String? = null
-
-    constructor(
-        kind: Int,
-        pubKeyHex: String,
-        dTag: String,
-        relayHint: String?,
-    ) : this(kind, pubKeyHex, dTag) {
-        this.relay = relayHint
-    }
-
-    fun countMemory(): Long =
-        5 * pointerSizeInBytes + // 7 fields, 4 bytes each reference (32bit)
-            8L + // kind
-            pubKeyHex.bytesUsedInMemory() +
-            dTag.bytesUsedInMemory() +
-            (relay?.bytesUsedInMemory() ?: 0)
-
+data class ATag(val kind: Int, val pubKeyHex: String, val dTag: String, val relay: String?) {
     fun toTag() = assembleATag(kind, pubKeyHex, dTag)
 
-    fun toATagArray() = removeTrailingNullsAndEmptyOthers("a", toTag(), relay)
-
-    fun toQTagArray() = removeTrailingNullsAndEmptyOthers("q", toTag(), relay)
-
-    fun toNAddr(overrideRelay: String? = relay): String =
-        TlvBuilder()
+    fun toNAddr(): String {
+        return TlvBuilder()
             .apply {
                 addString(Nip19Bech32.TlvTypes.SPECIAL, dTag)
-                addStringIfNotNull(Nip19Bech32.TlvTypes.RELAY, overrideRelay ?: relay)
+                addStringIfNotNull(Nip19Bech32.TlvTypes.RELAY, relay)
                 addHex(Nip19Bech32.TlvTypes.AUTHOR, pubKeyHex)
                 addInt(Nip19Bech32.TlvTypes.KIND, kind)
-            }.build()
+            }
+            .build()
             .toNAddress()
+    }
 
     companion object {
         fun assembleATag(
@@ -73,38 +46,43 @@ data class ATag(
             dTag: String,
         ) = "$kind:$pubKeyHex:$dTag"
 
-        fun isATag(key: String): Boolean = key.startsWith("naddr1") || key.contains(":")
+        fun isATag(key: String): Boolean {
+            return key.startsWith("naddr1") || key.contains(":")
+        }
 
         fun parse(
             address: String,
             relay: String?,
-        ): ATag? =
-            if (address.startsWith("naddr") || address.startsWith("nostr:naddr")) {
+        ): ATag? {
+            return if (address.startsWith("naddr") || address.startsWith("nostr:naddr")) {
                 parseNAddr(address)
             } else {
                 parseAtag(address, relay)
             }
+        }
 
         fun parseAtag(
             atag: String,
             relay: String?,
-        ): ATag? =
-            try {
-                val parts = atag.split(":", limit = 3)
+        ): ATag? {
+            return try {
+                val parts = atag.split(":")
                 Hex.decode(parts[1])
                 ATag(parts[0].toInt(), parts[1], parts[2], relay)
             } catch (t: Throwable) {
                 Log.w("ATag", "Error parsing A Tag: $atag: ${t.message}")
                 null
             }
+        }
 
-        fun parseAtagUnckecked(atag: String): ATag? =
-            try {
+        fun parseAtagUnckecked(atag: String): ATag? {
+            return try {
                 val parts = atag.split(":")
                 ATag(parts[0].toInt(), parts[1], parts[2], null)
             } catch (t: Throwable) {
                 null
             }
+        }
 
         fun parseNAddr(naddr: String): ATag? {
             try {

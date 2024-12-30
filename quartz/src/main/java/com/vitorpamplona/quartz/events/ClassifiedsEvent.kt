@@ -23,8 +23,6 @@ package com.vitorpamplona.quartz.events
 import androidx.compose.runtime.Immutable
 import com.vitorpamplona.quartz.encoders.ATag
 import com.vitorpamplona.quartz.encoders.HexKey
-import com.vitorpamplona.quartz.encoders.IMetaTag
-import com.vitorpamplona.quartz.encoders.Nip92MediaAttachments
 import com.vitorpamplona.quartz.signers.NostrSigner
 import com.vitorpamplona.quartz.utils.TimeUtils
 
@@ -81,9 +79,7 @@ class ClassifiedsEvent(
             null
         }
 
-    enum class CONDITION(
-        val value: String,
-    ) {
+    enum class CONDITION(val value: String) {
         NEW("new"),
         USED_LIKE_NEW("like new"),
         USED_GOOD("good"),
@@ -92,7 +88,7 @@ class ClassifiedsEvent(
 
     companion object {
         const val KIND = 30402
-        private val imageExtensions = listOf("png", "jpg", "gif", "bmp", "jpeg", "webp", "svg", "avif")
+        private val imageExtensions = listOf("png", "jpg", "gif", "bmp", "jpeg", "webp", "svg")
         const val ALT = "Classifieds listing"
 
         fun create(
@@ -113,8 +109,9 @@ class ClassifiedsEvent(
             zapReceiver: List<ZapSplitSetup>? = null,
             markAsSensitive: Boolean,
             zapRaiserAmount: Long?,
+            tipReceiver: List<TipSplitSetup>? = null,
             geohash: String? = null,
-            imetas: List<IMetaTag>? = null,
+            nip94attachments: List<Event>? = null,
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
             isDraft: Boolean,
@@ -189,9 +186,18 @@ class ClassifiedsEvent(
                 tags.add(arrayOf("content-warning", ""))
             }
             zapRaiserAmount?.let { tags.add(arrayOf("zapraiser", "$it")) }
+            tipReceiver?.forEach {
+                if (it.isAddress) {
+                    tags.add(arrayOf("monero", it.addressOrPubKeyHex, it.weight.toString()))
+                } else {
+                    tags.add(arrayOf("monero", it.addressOrPubKeyHex, it.relay ?: "", it.weight.toString()))
+                }
+            }
             geohash?.let { tags.addAll(geohashMipMap(it)) }
-            imetas?.forEach {
-                tags.add(Nip92MediaAttachments.createTag(it))
+            nip94attachments?.let {
+                it.forEach {
+                    // tags.add(arrayOf("nip94", it.toJson()))
+                }
             }
             tags.add(arrayOf("alt", ALT))
 
@@ -204,8 +210,4 @@ class ClassifiedsEvent(
     }
 }
 
-data class Price(
-    val amount: String,
-    val currency: String?,
-    val frequency: String?,
-)
+data class Price(val amount: String, val currency: String?, val frequency: String?)

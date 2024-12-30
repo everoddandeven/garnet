@@ -20,46 +20,53 @@
  */
 package com.vitorpamplona.quartz.encoders
 
+import com.vitorpamplona.quartz.events.FileHeaderEvent
 import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
 import kotlin.coroutines.cancellation.CancellationException
 
 class Nip54InlineMetadata {
-    fun createUrl(header: IMetaTag): String =
-        createUrl(
-            header.url,
-            header.properties,
+    fun convertFromFileHeader(header: FileHeaderEvent): String? {
+        val myUrl = header.url() ?: return null
+        return createUrl(
+            myUrl,
+            header.tags,
         )
+    }
 
     fun createUrl(
-        url: String,
-        tags: Map<String, String>,
+        imageUrl: String,
+        tags: Array<Array<String>>,
     ): String {
         val extension =
-            tags
-                .mapNotNull {
-                    if (it.key != "url") {
-                        "${it.key}=${URLEncoder.encode(it.value, "utf-8")}"
+            tags.mapNotNull {
+                if (it.isNotEmpty() && it[0] != "url") {
+                    if (it.size > 1) {
+                        "${it[0]}=${URLEncoder.encode(it[1], "utf-8")}"
                     } else {
-                        null
+                        "${it[0]}}="
                     }
-                }.joinToString("&")
+                } else {
+                    null
+                }
+            }.joinToString("&")
 
-        return if (url.contains("#")) {
-            "$url&$extension"
+        return if (imageUrl.contains("#")) {
+            "$imageUrl&$extension"
         } else {
-            "$url#$extension"
+            "$imageUrl#$extension"
         }
     }
 
-    fun parse(url: String): Map<String, String> =
-        try {
+    fun parse(url: String): Map<String, String> {
+        return try {
             fragments(URI(url))
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             emptyMap()
         }
+    }
 
     private fun fragments(uri: URI): Map<String, String> {
         if (uri.rawFragment == null) return emptyMap()

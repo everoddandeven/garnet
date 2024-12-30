@@ -33,15 +33,21 @@ class BadgeProfilesEvent(
     content: String,
     sig: HexKey,
 ) : BaseAddressableEvent(id, pubKey, createdAt, KIND, tags, content, sig) {
-    fun badgeAwardEvents() = taggedEvents()
+    fun badgeAwardEvents() = tags.filter { it.firstOrNull() == "e" }.mapNotNull { it.getOrNull(1) }
 
-    fun badgeAwardDefinitions() = taggedAddresses()
+    fun badgeAwardDefinitions() =
+        tags
+            .filter { it.firstOrNull() == "a" }
+            .mapNotNull {
+                val aTagValue = it.getOrNull(1)
+                val relay = it.getOrNull(2)
+
+                if (aTagValue != null) ATag.parse(aTagValue, relay) else null
+            }
 
     companion object {
         const val KIND = 30008
-        private const val STANDARD_D_TAG = "profile_badges"
-        private const val ALT = "List of accepted badges by the author"
-
-        fun createAddressTag(pubKey: HexKey): ATag = ATag(KIND, pubKey, STANDARD_D_TAG, null)
+        const val STANDARD_D_TAG = "profile_badges"
+        const val ALT = "List of accepted badges by the author"
     }
 }

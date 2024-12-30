@@ -24,7 +24,6 @@ import android.util.Log
 import androidx.compose.runtime.Immutable
 import com.vitorpamplona.quartz.encoders.HexKey
 import com.vitorpamplona.quartz.encoders.LnInvoiceUtil
-import com.vitorpamplona.quartz.utils.pointerSizeInBytes
 
 @Immutable
 class LnZapEvent(
@@ -34,25 +33,9 @@ class LnZapEvent(
     tags: Array<Array<String>>,
     content: String,
     sig: HexKey,
-) : Event(id, pubKey, createdAt, KIND, tags, content, sig),
-    LnZapEventInterface {
+) : LnZapEventInterface, Event(id, pubKey, createdAt, KIND, tags, content, sig) {
     // This event is also kept in LocalCache (same object)
     @Transient val zapRequest: LnZapRequestEvent?
-
-    // Keeps this as a field because it's a heavier function used everywhere.
-    val amount by lazy {
-        try {
-            lnInvoice()?.let { LnInvoiceUtil.getAmountInSats(it) }
-        } catch (e: Exception) {
-            Log.e("LnZapEvent", "Failed to Parse LnInvoice ${lnInvoice()}", e)
-            null
-        }
-    }
-
-    override fun countMemory(): Long =
-        super.countMemory() +
-            pointerSizeInBytes + (zapRequest?.countMemory() ?: 0) + // rough calculation
-            pointerSizeInBytes + 36 // bigdecimal size
 
     override fun containedPost(): LnZapRequestEvent? =
         try {
@@ -72,11 +55,7 @@ class LnZapEvent(
 
     override fun zappedPollOption(): Int? =
         try {
-            zapRequest
-                ?.tags
-                ?.firstOrNull { it.size > 1 && it[0] == POLL_OPTION }
-                ?.get(1)
-                ?.toInt()
+            zapRequest?.tags?.firstOrNull { it.size > 1 && it[0] == POLL_OPTION }?.get(1)?.toInt()
         } catch (e: Exception) {
             Log.e("LnZapEvent", "ZappedPollOption failed to parse", e)
             null
@@ -86,7 +65,19 @@ class LnZapEvent(
 
     override fun amount() = amount
 
-    override fun content(): String = content
+    // Keeps this as a field because it's a heavier function used everywhere.
+    val amount by lazy {
+        try {
+            lnInvoice()?.let { LnInvoiceUtil.getAmountInSats(it) }
+        } catch (e: Exception) {
+            Log.e("LnZapEvent", "Failed to Parse LnInvoice ${lnInvoice()}", e)
+            null
+        }
+    }
+
+    override fun content(): String {
+        return content
+    }
 
     fun lnInvoice() = tags.firstOrNull { it.size > 1 && it[0] == "bolt11" }?.get(1)
 
@@ -97,7 +88,7 @@ class LnZapEvent(
         const val ALT = "Zap event"
     }
 
-    enum class ZapType {
+    enum class ZapType() {
         PUBLIC,
         PRIVATE,
         ANONYMOUS,

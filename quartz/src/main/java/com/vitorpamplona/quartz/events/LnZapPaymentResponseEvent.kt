@@ -29,8 +29,6 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import com.vitorpamplona.quartz.encoders.HexKey
 import com.vitorpamplona.quartz.signers.NostrSigner
-import com.vitorpamplona.quartz.utils.bytesUsedInMemory
-import com.vitorpamplona.quartz.utils.pointerSizeInBytes
 
 @Immutable
 class LnZapPaymentResponseEvent(
@@ -44,20 +42,20 @@ class LnZapPaymentResponseEvent(
     // Once one of an app user decrypts the payment, all users else can see it.
     @Transient private var response: Response? = null
 
-    override fun countMemory(): Long = super.countMemory() + pointerSizeInBytes + (response?.countMemory() ?: 0)
-
     fun requestAuthor() = tags.firstOrNull { it.size > 1 && it[0] == "p" }?.get(1)
 
     fun requestId() = tags.firstOrNull { it.size > 1 && it[0] == "e" }?.get(1)
 
-    fun talkingWith(oneSideHex: String): HexKey = if (pubKey == oneSideHex) requestAuthor() ?: pubKey else pubKey
+    fun talkingWith(oneSideHex: String): HexKey {
+        return if (pubKey == oneSideHex) requestAuthor() ?: pubKey else pubKey
+    }
 
     private fun plainContent(
         signer: NostrSigner,
         onReady: (String) -> Unit,
     ) {
         try {
-            signer.decrypt(content, talkingWith(signer.pubKey)) { content -> onReady(content) }
+            signer.nip04Decrypt(content, talkingWith(signer.pubKey)) { content -> onReady(content) }
         } catch (e: Exception) {
             Log.w("PrivateDM", "Error decrypting the message ${e.message}")
         }
@@ -95,35 +93,17 @@ class LnZapPaymentResponseEvent(
 // RESPONSE OBJECTS
 abstract class Response(
     @JsonProperty("result_type") val resultType: String,
-) {
-    abstract fun countMemory(): Long
-}
+)
 
 // PayInvoice Call
 
-class PayInvoiceSuccessResponse(
-    val result: PayInvoiceResultParams? = null,
-) : Response("pay_invoice") {
-    class PayInvoiceResultParams(
-        val preimage: String,
-    ) {
-        fun countMemory(): Long = pointerSizeInBytes + preimage.bytesUsedInMemory()
-    }
-
-    override fun countMemory(): Long = pointerSizeInBytes + (result?.countMemory() ?: 0)
+class PayInvoiceSuccessResponse(val result: PayInvoiceResultParams? = null) :
+    Response("pay_invoice") {
+    class PayInvoiceResultParams(val preimage: String)
 }
 
-class PayInvoiceErrorResponse(
-    val error: PayInvoiceErrorParams? = null,
-) : Response("pay_invoice") {
-    class PayInvoiceErrorParams(
-        val code: ErrorType?,
-        val message: String?,
-    ) {
-        fun countMemory(): Long = pointerSizeInBytes + pointerSizeInBytes + (message?.bytesUsedInMemory() ?: 0)
-    }
-
-    override fun countMemory(): Long = pointerSizeInBytes + (error?.countMemory() ?: 0)
+class PayInvoiceErrorResponse(val error: PayInvoiceErrorParams? = null) : Response("pay_invoice") {
+    class PayInvoiceErrorParams(val code: ErrorType?, val message: String?)
 
     enum class ErrorType {
         @JsonProperty(value = "RATE_LIMITED")

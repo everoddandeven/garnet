@@ -40,11 +40,7 @@ class HighlightEvent(
 
     fun quote() = content
 
-    fun context() = firstTagFor("context")
-
     fun inPost() = firstTaggedAddress()
-
-    fun inPostVersion() = firstTaggedEvent()
 
     companion object {
         const val KIND = 9802

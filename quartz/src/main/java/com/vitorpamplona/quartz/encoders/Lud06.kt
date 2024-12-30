@@ -48,12 +48,13 @@ class Lud06 {
         }
     }
 
-    fun toLnUrlp(str: String): String? =
-        try {
+    fun toLnUrlp(str: String): String? {
+        return try {
             String(Bech32.decodeBytes(str, false).second)
         } catch (t: Throwable) {
             t.printStackTrace()
             Log.w("Lud06ToLud16", "Fail to convert LUD06 to LUD16", t)
             null
         }
+    }
 }

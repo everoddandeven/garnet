@@ -46,14 +46,18 @@ class ReactionEvent(
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
             onReady: (ReactionEvent) -> Unit,
-        ) = create("\u26A0\uFE0F", originalNote, signer, createdAt, onReady)
+        ) {
+            return create("\u26A0\uFE0F", originalNote, signer, createdAt, onReady)
+        }
 
         fun createLike(
             originalNote: EventInterface,
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
             onReady: (ReactionEvent) -> Unit,
-        ) = create("+", originalNote, signer, createdAt, onReady)
+        ) {
+            return create("+", originalNote, signer, createdAt, onReady)
+        }
 
         fun create(
             content: String,

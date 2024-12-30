@@ -63,7 +63,6 @@ class GiftWrapSigningBenchmark {
                 markAsSensitive = true,
                 zapRaiserAmount = 10000,
                 geohash = null,
-                isDraft = false,
                 signer = sender,
             ) {
                 countDownLatch.countDown()
@@ -92,7 +91,6 @@ class GiftWrapSigningBenchmark {
             markAsSensitive = true,
             zapRaiserAmount = 10000,
             geohash = null,
-            isDraft = false,
             signer = sender,
         ) {
             msg = it
@@ -134,7 +132,6 @@ class GiftWrapSigningBenchmark {
             markAsSensitive = true,
             zapRaiserAmount = 10000,
             geohash = null,
-            isDraft = false,
             signer = sender,
         ) {
             SealedGossipEvent.create(
@@ -180,7 +177,6 @@ class GiftWrapSigningBenchmark {
             markAsSensitive = true,
             zapRaiserAmount = 10000,
             geohash = null,
-            isDraft = false,
             signer = sender,
         ) {
             SealedGossipEvent.create(

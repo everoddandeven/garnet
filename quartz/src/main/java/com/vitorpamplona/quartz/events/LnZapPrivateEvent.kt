@@ -23,7 +23,6 @@ package com.vitorpamplona.quartz.events
 import androidx.compose.runtime.Immutable
 import com.vitorpamplona.quartz.encoders.HexKey
 import com.vitorpamplona.quartz.signers.NostrSigner
-import com.vitorpamplona.quartz.signers.NostrSignerSync
 import com.vitorpamplona.quartz.utils.TimeUtils
 
 @Immutable
@@ -48,12 +47,5 @@ class LnZapPrivateEvent(
         ) {
             signer.sign(createdAt, KIND, tags, content, onReady)
         }
-
-        fun create(
-            signer: NostrSignerSync,
-            tags: Array<Array<String>> = emptyArray(),
-            content: String = "",
-            createdAt: Long = TimeUtils.now(),
-        ): LnZapPrivateEvent? = signer.sign(createdAt, KIND, tags, content)
     }
 }

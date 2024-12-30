@@ -22,7 +22,6 @@ package com.vitorpamplona.quartz.events
 
 import androidx.compose.runtime.Immutable
 import com.vitorpamplona.quartz.encoders.HexKey
-import com.vitorpamplona.quartz.encoders.IMetaTag
 import com.vitorpamplona.quartz.encoders.Nip92MediaAttachments
 import com.vitorpamplona.quartz.signers.NostrSigner
 import com.vitorpamplona.quartz.utils.TimeUtils
@@ -35,15 +34,15 @@ class ChannelMessageEvent(
     tags: Array<Array<String>>,
     content: String,
     sig: HexKey,
-) : BaseTextNoteEvent(id, pubKey, createdAt, KIND, tags, content, sig),
-    IsInPublicChatChannel {
+) : BaseTextNoteEvent(id, pubKey, createdAt, KIND, tags, content, sig), IsInPublicChatChannel {
     override fun channel() =
         tags.firstOrNull { it.size > 3 && it[0] == "e" && it[3] == "root" }?.get(1)
             ?: tags.firstOrNull { it.size > 1 && it[0] == "e" }?.get(1)
 
-    override fun markedReplyTos() = super.markedReplyTos().filter { it != channel() }
-
-    override fun unMarkedReplyTos() = super.unMarkedReplyTos().filter { it != channel() }
+    override fun replyTos() =
+        tags
+            .filter { it.firstOrNull() == "e" && it.getOrNull(1) != channel() }
+            .mapNotNull { it.getOrNull(1) }
 
     companion object {
         const val KIND = 42
@@ -59,9 +58,9 @@ class ChannelMessageEvent(
             createdAt: Long = TimeUtils.now(),
             markAsSensitive: Boolean,
             zapRaiserAmount: Long?,
-            directMentions: Set<HexKey> = emptySet(),
+            tipReceiver: List<TipSplitSetup>? = null,
             geohash: String? = null,
-            imetas: List<IMetaTag>? = null,
+            nip94attachments: List<FileHeaderEvent>? = null,
             isDraft: Boolean,
             onReady: (ChannelMessageEvent) -> Unit,
         ) {
@@ -69,14 +68,8 @@ class ChannelMessageEvent(
                 mutableListOf(
                     arrayOf("e", channel, "", "root"),
                 )
+            replyTos?.forEach { tags.add(arrayOf("e", it)) }
             mentions?.forEach { tags.add(arrayOf("p", it)) }
-            replyTos?.forEach {
-                if (it in directMentions) {
-                    tags.add(arrayOf("q", it))
-                } else {
-                    tags.add(arrayOf("e", it))
-                }
-            }
             zapReceiver?.forEach {
                 tags.add(arrayOf("zap", it.lnAddressOrPubKeyHex, it.relay ?: "", it.weight.toString()))
             }
@@ -84,9 +77,20 @@ class ChannelMessageEvent(
                 tags.add(arrayOf("content-warning", ""))
             }
             zapRaiserAmount?.let { tags.add(arrayOf("zapraiser", "$it")) }
+            tipReceiver?.forEach {
+                if (it.isAddress) {
+                    tags.add(arrayOf("monero", it.addressOrPubKeyHex, it.weight.toString()))
+                } else {
+                    tags.add(arrayOf("monero", it.addressOrPubKeyHex, it.relay ?: "", it.weight.toString()))
+                }
+            }
             geohash?.let { tags.addAll(geohashMipMap(it)) }
-            imetas?.forEach {
-                tags.add(Nip92MediaAttachments.createTag(it))
+            nip94attachments?.let {
+                it.forEach {
+                    Nip92MediaAttachments().convertFromFileHeader(it)?.let {
+                        tags.add(it)
+                    }
+                }
             }
             tags.add(
                 arrayOf("alt", ALT),

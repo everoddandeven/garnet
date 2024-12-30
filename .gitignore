@@ -7,13 +7,9 @@
 /.idea/assetWizardSettings.xml
 /.idea/androidTestResultsUserPreferences.xml
 /.idea/deploymentTargetDropDown.xml
-/.idea/deploymentTargetSelector.xml
 /.idea/appInsightsSettings.xml
 /.idea/ktlint-plugin.xml
 /.idea/ktfmt.xml
-/.idea/studiobot.xml
-/.idea/other.xml
-/.idea/runConfigurations.xml
 .DS_Store
 /build
 /captures
@@ -43,7 +39,6 @@ out/
 .gradle
 .gradle/
 build/
-.kotlin/
 
 # Local configuration file (sdk path, etc)
 local.properties

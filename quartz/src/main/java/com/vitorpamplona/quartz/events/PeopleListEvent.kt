@@ -24,9 +24,8 @@ import androidx.compose.runtime.Immutable
 import com.vitorpamplona.quartz.encoders.HexKey
 import com.vitorpamplona.quartz.signers.NostrSigner
 import com.vitorpamplona.quartz.utils.TimeUtils
-import com.vitorpamplona.quartz.utils.bytesUsedInMemory
-import com.vitorpamplona.quartz.utils.pointerSizeInBytes
 import kotlinx.collections.immutable.ImmutableSet
+import kotlinx.collections.immutable.persistentSetOf
 
 @Immutable
 class PeopleListEvent(
@@ -40,11 +39,6 @@ class PeopleListEvent(
     @Transient var publicAndPrivateUserCache: ImmutableSet<HexKey>? = null
 
     @Transient var publicAndPrivateWordCache: ImmutableSet<String>? = null
-
-    override fun countMemory(): Long =
-        super.countMemory() +
-            pointerSizeInBytes + (publicAndPrivateUserCache?.sumOf { pointerSizeInBytes + it.bytesUsedInMemory() } ?: 0) +
-            pointerSizeInBytes + (publicAndPrivateWordCache?.sumOf { pointerSizeInBytes + it.bytesUsedInMemory() } ?: 0)
 
     fun publicAndPrivateWords(
         signer: NostrSigner,
@@ -77,9 +71,9 @@ class PeopleListEvent(
     }
 
     @Immutable
-    class UsersAndWords(
-        val users: Set<String> = setOf(),
-        val words: Set<String> = setOf(),
+    data class UsersAndWords(
+        val users: ImmutableSet<String> = persistentSetOf(),
+        val words: ImmutableSet<String> = persistentSetOf(),
     )
 
     fun publicAndPrivateUsersAndWords(
@@ -126,7 +120,9 @@ class PeopleListEvent(
         const val BLOCK_LIST_D_TAG = "mute"
         const val ALT = "List of people"
 
-        fun blockListFor(pubKeyHex: HexKey): String = "30000:$pubKeyHex:$BLOCK_LIST_D_TAG"
+        fun blockListFor(pubKeyHex: HexKey): String {
+            return "30000:$pubKeyHex:$BLOCK_LIST_D_TAG"
+        }
 
         fun createListWithTag(
             name: String,
@@ -165,7 +161,9 @@ class PeopleListEvent(
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
             onReady: (PeopleListEvent) -> Unit,
-        ) = createListWithTag(name, "p", pubKeyHex, isPrivate, signer, createdAt, onReady)
+        ) {
+            return createListWithTag(name, "p", pubKeyHex, isPrivate, signer, createdAt, onReady)
+        }
 
         fun createListWithWord(
             name: String,
@@ -174,7 +172,9 @@ class PeopleListEvent(
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
             onReady: (PeopleListEvent) -> Unit,
-        ) = createListWithTag(name, "word", word, isPrivate, signer, createdAt, onReady)
+        ) {
+            return createListWithTag(name, "word", word, isPrivate, signer, createdAt, onReady)
+        }
 
         fun addUsers(
             earlierVersion: PeopleListEvent,
@@ -223,7 +223,9 @@ class PeopleListEvent(
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
             onReady: (PeopleListEvent) -> Unit,
-        ) = addTag(earlierVersion, "word", word, isPrivate, signer, createdAt, onReady)
+        ) {
+            return addTag(earlierVersion, "word", word, isPrivate, signer, createdAt, onReady)
+        }
 
         fun addUser(
             earlierVersion: PeopleListEvent,
@@ -232,7 +234,9 @@ class PeopleListEvent(
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
             onReady: (PeopleListEvent) -> Unit,
-        ) = addTag(earlierVersion, "p", pubKeyHex, isPrivate, signer, createdAt, onReady)
+        ) {
+            return addTag(earlierVersion, "p", pubKeyHex, isPrivate, signer, createdAt, onReady)
+        }
 
         fun addTag(
             earlierVersion: PeopleListEvent,
@@ -280,7 +284,9 @@ class PeopleListEvent(
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
             onReady: (PeopleListEvent) -> Unit,
-        ) = removeTag(earlierVersion, "word", word, isPrivate, signer, createdAt, onReady)
+        ) {
+            return removeTag(earlierVersion, "word", word, isPrivate, signer, createdAt, onReady)
+        }
 
         fun removeUser(
             earlierVersion: PeopleListEvent,
@@ -289,7 +295,9 @@ class PeopleListEvent(
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
             onReady: (PeopleListEvent) -> Unit,
-        ) = removeTag(earlierVersion, "p", pubKeyHex, isPrivate, signer, createdAt, onReady)
+        ) {
+            return removeTag(earlierVersion, "p", pubKeyHex, isPrivate, signer, createdAt, onReady)
+        }
 
         fun removeTag(
             earlierVersion: PeopleListEvent,

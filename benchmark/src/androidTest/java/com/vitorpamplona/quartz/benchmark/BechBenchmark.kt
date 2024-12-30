@@ -83,7 +83,8 @@ class BechBenchmark {
                 -123,
                 6,
                 92,
-            ).map { it.toByte() }
+            )
+                .map { it.toByte() }
         benchmarkRule.measureRepeated { assertEquals(expected, myUser.bechToBytes().toList()) }
     }
 }

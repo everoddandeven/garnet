@@ -23,10 +23,10 @@ package com.vitorpamplona.quartz.events
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import com.vitorpamplona.quartz.encoders.HexKey
-import com.vitorpamplona.quartz.encoders.IMetaTag
 import com.vitorpamplona.quartz.encoders.Nip92MediaAttachments
 import com.vitorpamplona.quartz.signers.NostrSigner
 import com.vitorpamplona.quartz.utils.TimeUtils
+import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.toImmutableSet
 
 @Immutable
@@ -37,9 +37,7 @@ class ChatMessageEvent(
     tags: Array<Array<String>>,
     content: String,
     sig: HexKey,
-) : WrappedEvent(id, pubKey, createdAt, KIND, tags, content, sig),
-    ChatroomKeyable,
-    NIP17Group {
+) : WrappedEvent(id, pubKey, createdAt, KIND, tags, content, sig), ChatroomKeyable {
     /** Recipients intended to receive this conversation */
     fun recipientsPubKey() = tags.mapNotNull { if (it.size > 1 && it[0] == "p") it[1] else null }
 
@@ -63,9 +61,9 @@ class ChatMessageEvent(
         return result
     }
 
-    override fun groupMembers() = recipientsPubKey().plus(pubKey).toSet()
-
-    override fun chatroomKey(toRemove: String): ChatroomKey = ChatroomKey(talkingWith(toRemove).toImmutableSet())
+    override fun chatroomKey(toRemove: String): ChatroomKey {
+        return ChatroomKey(talkingWith(toRemove).toImmutableSet())
+    }
 
     companion object {
         const val KIND = 14
@@ -80,10 +78,11 @@ class ChatMessageEvent(
             zapReceiver: List<ZapSplitSetup>? = null,
             markAsSensitive: Boolean = false,
             zapRaiserAmount: Long? = null,
+            tipReceiver: List<TipSplitSetup>? = null,
             geohash: String? = null,
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
-            imetas: List<IMetaTag>? = null,
+            nip94attachments: List<FileHeaderEvent>? = null,
             isDraft: Boolean,
             onReady: (ChatMessageEvent) -> Unit,
         ) {
@@ -98,10 +97,21 @@ class ChatMessageEvent(
                 tags.add(arrayOf("content-warning", ""))
             }
             zapRaiserAmount?.let { tags.add(arrayOf("zapraiser", "$it")) }
+            tipReceiver?.forEach {
+                if (it.isAddress) {
+                    tags.add(arrayOf("monero", it.addressOrPubKeyHex, it.weight.toString()))
+                } else {
+                    tags.add(arrayOf("monero", it.addressOrPubKeyHex, it.relay ?: "", it.weight.toString()))
+                }
+            }
             geohash?.let { tags.addAll(geohashMipMap(it)) }
             subject?.let { tags.add(arrayOf("subject", it)) }
-            imetas?.forEach {
-                tags.add(Nip92MediaAttachments.createTag(it))
+            nip94attachments?.let {
+                it.forEach {
+                    Nip92MediaAttachments().convertFromFileHeader(it)?.let {
+                        tags.add(it)
+                    }
+                }
             }
             // tags.add(arrayOf("alt", alt))
 
@@ -114,15 +124,11 @@ class ChatMessageEvent(
     }
 }
 
-interface NIP17Group {
-    fun groupMembers(): Set<HexKey>
-}
-
 interface ChatroomKeyable {
     fun chatroomKey(toRemove: HexKey): ChatroomKey
 }
 
 @Stable
 data class ChatroomKey(
-    val users: Set<HexKey>,
+    val users: ImmutableSet<HexKey>,
 )

@@ -132,10 +132,9 @@ class NIP19ParserTest {
     @Test
     fun nAddrParserPablo() {
         val result =
-            Nip19Bech32
-                .uriToRoute(
-                    "naddr1qq2hs7p30p6kcunxxamkgcnyd33xxve3veshyq3qyujphdcz69z6jafxpnldae3xtymdekfeatkt3r4qusr3w5krqspqxpqqqpaxjlg805f",
-                )?.entity as? Nip19Bech32.NAddress
+            Nip19Bech32.uriToRoute(
+                "naddr1qq2hs7p30p6kcunxxamkgcnyd33xxve3veshyq3qyujphdcz69z6jafxpnldae3xtymdekfeatkt3r4qusr3w5krqspqxpqqqpaxjlg805f",
+            )?.entity as? Nip19Bech32.NAddress
 
         assertNotNull(result)
         assertEquals(
@@ -150,10 +149,9 @@ class NIP19ParserTest {
     @Test
     fun nAddrParserGizmo() {
         val result =
-            Nip19Bech32
-                .uriToRoute(
-                    "naddr1qpqrvvfnvccrzdryxgunzvtxvgukge34xfjnqdpcv9sk2desxgmrscesvserzd3h8ycrywphvg6nsvf58ycnqef3v5mnsvt98pjnqdfs8ypzq3huhccxt6h34eupz3jeynjgjgek8lel2f4adaea0svyk94a3njdqvzqqqr4gudhrkyk",
-                )?.entity as? Nip19Bech32.NAddress
+            Nip19Bech32.uriToRoute(
+                "naddr1qpqrvvfnvccrzdryxgunzvtxvgukge34xfjnqdpcv9sk2desxgmrscesvserzd3h8ycrywphvg6nsvf58ycnqef3v5mnsvt98pjnqdfs8ypzq3huhccxt6h34eupz3jeynjgjgek8lel2f4adaea0svyk94a3njdqvzqqqr4gudhrkyk",
+            )?.entity as? Nip19Bech32.NAddress
 
         assertNotNull(result)
         assertEquals(
@@ -168,10 +166,9 @@ class NIP19ParserTest {
     @Test
     fun nAddrParserGizmo2() {
         val result =
-            Nip19Bech32
-                .uriToRoute(
-                    "naddr1qq9rzd3h8y6nqwf5xyuqygzxljlrqe027xh8sy2xtyjwfzfrxcll8afxh4hh847psjckhkxwf5psgqqqw4rsty50fx",
-                )?.entity as? Nip19Bech32.NAddress
+            Nip19Bech32.uriToRoute(
+                "naddr1qq9rzd3h8y6nqwf5xyuqygzxljlrqe027xh8sy2xtyjwfzfrxcll8afxh4hh847psjckhkxwf5psgqqqw4rsty50fx",
+            )?.entity as? Nip19Bech32.NAddress
 
         assertNotNull(result)
         assertEquals(
@@ -181,18 +178,6 @@ class NIP19ParserTest {
         assertEquals(true, result?.relay?.isEmpty())
         assertEquals("46fcbe3065eaf1ae7811465924e48923363ff3f526bd6f73d7c184b16bd8ce4d", result?.author)
         assertEquals(30023, result?.kind)
-    }
-
-    @Test
-    fun nEventParserCompleteTest() {
-        val result =
-            Nip19Bech32.uriToRoute("nostr:nevent1qqsdw6xpk28tjnrajz4xhy2jqg0md8ywxj6997rsutjzxs0207tedjspz4mhxue69uhhyetvv9ujumn0wd68ytnzvuhsygx2crjrydvqdksffurc0fdsfc566pxtrg78afw0v8kursecwdqg9vpsgqqqqqqsnknas6")?.entity as? Nip19Bech32.NEvent
-
-        assertNotNull(result)
-        assertEquals("d768c1b28eb94c7d90aa6b9152021fb69c8e34b452f870e2e42341ea7f9796ca", result?.hex)
-        assertEquals("wss://relay.nostr.bg/", result?.relay?.firstOrNull())
-        assertEquals("cac0e43235806da094f0787a5b04e29ad04cb1a3c7ea5cf61edc1c338734082b", result?.author)
-        assertEquals(1, result?.kind)
     }
 
     @Test
@@ -208,24 +193,11 @@ class NIP19ParserTest {
     }
 
     @Test
-    fun nEventParser2Test() {
-        val result =
-            Nip19Bech32.uriToRoute("nostr:nevent1qqsfvaa2w3nkw472lt2ezr6x5x347k8hht398vp7hrl6wrdjldry86sprfmhxue69uhhyetvv9ujuam9wd6x2unwvf6xxtnrdaks5myyah")?.entity as? Nip19Bech32.NEvent
-
-        assertNotNull(result)
-        assertEquals("9677aa74676757cafad5910f46a1a35f58f7bae253b03eb8ffa70db2fb4643ea", result?.hex)
-        assertEquals("wss://relay.westernbtc.com", result?.relay?.firstOrNull())
-        assertEquals(null, result?.author)
-        assertEquals(null, result?.kind)
-    }
-
-    @Test
     fun nEventParser() {
         val result =
-            Nip19Bech32
-                .uriToRoute(
-                    "nostr:nevent1qqstvrl6wftd8ht4g0vrp6m30tjs6pdxcvk977g769dcvlptkzu4ftqppamhxue69uhkummnw3ezumt0d5pzp78lz8r60568sd2a8dx3wnj6gume02gxaf92vx4fk67qv5kpagt6qvzqqqqqqygqr86c",
-                )?.entity as? Nip19Bech32.NEvent
+            Nip19Bech32.uriToRoute(
+                "nostr:nevent1qqstvrl6wftd8ht4g0vrp6m30tjs6pdxcvk977g769dcvlptkzu4ftqppamhxue69uhkummnw3ezumt0d5pzp78lz8r60568sd2a8dx3wnj6gume02gxaf92vx4fk67qv5kpagt6qvzqqqqqqygqr86c",
+            )?.entity as? Nip19Bech32.NEvent
 
         assertNotNull(result)
         assertEquals("b60ffa7256d3dd7543d830eb717ae50d05a6c32c5f791ed15b867c2bb0b954ac", result?.hex)
@@ -237,10 +209,9 @@ class NIP19ParserTest {
     @Test
     fun nEventParser2() {
         val result =
-            Nip19Bech32
-                .uriToRoute(
-                    "nostr:nevent1qqsplpuwsgrrmq85rfup6w3w777rxmcmadu590emfx6z4msj2844euqpz3mhxue69uhhyetvv9ujuerpd46hxtnfdupzq3svyhng9ld8sv44950j957j9vchdktj7cxumsep9mvvjthc2pjuqvzqqqqqqye3a70w",
-                )?.entity as? Nip19Bech32.NEvent
+            Nip19Bech32.uriToRoute(
+                "nostr:nevent1qqsplpuwsgrrmq85rfup6w3w777rxmcmadu590emfx6z4msj2844euqpz3mhxue69uhhyetvv9ujuerpd46hxtnfdupzq3svyhng9ld8sv44950j957j9vchdktj7cxumsep9mvvjthc2pjuqvzqqqqqqye3a70w",
+            )?.entity as? Nip19Bech32.NEvent
 
         assertNotNull(result)
         assertEquals("1f878e82063d80f41a781d3a2ef7bc336f1beb7942bf3b49b42aee1251eb5cf0", result?.hex)
@@ -252,10 +223,9 @@ class NIP19ParserTest {
     @Test
     fun nEventParser3() {
         val result =
-            Nip19Bech32
-                .uriToRoute(
-                    "nostr:nevent1qqsg6gechd3dhzx38n4z8a2lylzgsmmgeamhmtzz72m9ummsnf0xjfspsdmhxue69uhkummn9ekx7mpvwaehxw309ahx7um5wghx77r5wghxgetk93mhxue69uhhyetvv9ujumn0wd68ytnzvuk8wumn8ghj7mn0wd68ytn9d9h82mny0fmkzmn6d9njuumsv93k2trhwden5te0wfjkccte9ehx7um5wghxyctwvsk8wumn8ghj7un9d3shjtnyv9kh2uewd9hs3kqsdn",
-                )?.entity as? Nip19Bech32.NEvent
+            Nip19Bech32.uriToRoute(
+                "nostr:nevent1qqsg6gechd3dhzx38n4z8a2lylzgsmmgeamhmtzz72m9ummsnf0xjfspsdmhxue69uhkummn9ekx7mpvwaehxw309ahx7um5wghx77r5wghxgetk93mhxue69uhhyetvv9ujumn0wd68ytnzvuk8wumn8ghj7mn0wd68ytn9d9h82mny0fmkzmn6d9njuumsv93k2trhwden5te0wfjkccte9ehx7um5wghxyctwvsk8wumn8ghj7un9d3shjtnyv9kh2uewd9hs3kqsdn",
+            )?.entity as? Nip19Bech32.NEvent
 
         assertNotNull(result)
         assertEquals("8d2338bb62db88d13cea23f55f27c4886f68cf777dac42f2b65e6f709a5e6926", result?.hex)
@@ -268,10 +238,9 @@ class NIP19ParserTest {
     @Test
     fun nEventParserInvalidChecksum() {
         val result =
-            Nip19Bech32
-                .uriToRoute(
-                    "nostr:nevent1qqsyxq8v0730nz38dupnjzp5jegkyz4gu2ptwcps4v32hjnrap0q0espz3mhxue69uhhyetvv9ujuerpd46hxtnfdupzq3svyhng9ld8sv44950j957j9vchdktj7cxumsep9mvvjthc2pjuqvzqqqqqqyn3t9gj",
-                )?.entity as? Nip19Bech32.NEvent
+            Nip19Bech32.uriToRoute(
+                "nostr:nevent1qqsyxq8v0730nz38dupnjzp5jegkyz4gu2ptwcps4v32hjnrap0q0espz3mhxue69uhhyetvv9ujuerpd46hxtnfdupzq3svyhng9ld8sv44950j957j9vchdktj7cxumsep9mvvjthc2pjuqvzqqqqqqyn3t9gj",
+            )?.entity as? Nip19Bech32.NEvent
 
         assertNotNull(result)
         assertEquals("4300ec7fa2f98a276f033908349651620aa8e282b76030ab22abca63e85e07e6", result?.hex)

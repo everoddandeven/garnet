@@ -76,7 +76,8 @@ class AudioHeaderEvent(
                         }
                     },
                     arrayOf("alt", ALT),
-                ).toTypedArray()
+                )
+                    .toTypedArray()
 
             signer.sign(createdAt, KIND, tags, description, onReady)
         }

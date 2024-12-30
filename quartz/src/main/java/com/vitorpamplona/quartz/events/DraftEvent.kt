@@ -25,7 +25,6 @@ import com.vitorpamplona.quartz.encoders.ATag
 import com.vitorpamplona.quartz.encoders.HexKey
 import com.vitorpamplona.quartz.signers.NostrSigner
 import com.vitorpamplona.quartz.utils.TimeUtils
-import com.vitorpamplona.quartz.utils.pointerSizeInBytes
 
 @Immutable
 class DraftEvent(
@@ -38,17 +37,17 @@ class DraftEvent(
 ) : BaseAddressableEvent(id, pubKey, createdAt, KIND, tags, content, sig) {
     @Transient private var cachedInnerEvent: Map<HexKey, Event?> = mapOf()
 
-    override fun countMemory(): Long =
-        super.countMemory() +
-            32 + (cachedInnerEvent.values.sumOf { pointerSizeInBytes + (it?.countMemory() ?: 0) })
-
     override fun isContentEncoded() = true
 
     fun isDeleted() = content == ""
 
-    fun preCachedDraft(signer: NostrSigner): Event? = cachedInnerEvent[signer.pubKey]
+    fun preCachedDraft(signer: NostrSigner): Event? {
+        return cachedInnerEvent[signer.pubKey]
+    }
 
-    fun preCachedDraft(pubKey: HexKey): Event? = cachedInnerEvent[pubKey]
+    fun preCachedDraft(pubKey: HexKey): Event? {
+        return cachedInnerEvent[pubKey]
+    }
 
     fun allCache() = cachedInnerEvent.values
 
@@ -115,32 +114,8 @@ class DraftEvent(
         fun createAddressTag(
             pubKey: HexKey,
             dTag: String,
-        ): String = ATag.assembleATag(KIND, pubKey, dTag)
-
-        fun create(
-            dTag: String,
-            originalNote: TorrentCommentEvent,
-            signer: NostrSigner,
-            createdAt: Long = TimeUtils.now(),
-            onReady: (DraftEvent) -> Unit,
-        ) {
-            val tagsWithMarkers =
-                originalNote.tags().filter {
-                    it.size > 3 && (it[0] == "e" || it[0] == "a") && (it[3] == "root" || it[3] == "reply")
-                }
-
-            create(dTag, originalNote, tagsWithMarkers, signer, createdAt, onReady)
-        }
-
-        fun create(
-            dTag: String,
-            originalNote: InteractiveStoryBaseEvent,
-            signer: NostrSigner,
-            createdAt: Long = TimeUtils.now(),
-            onReady: (DraftEvent) -> Unit,
-        ) {
-            val tags = mutableListOf<Array<String>>()
-            create(dTag, originalNote, tags, signer, createdAt, onReady)
+        ): String {
+            return ATag.assembleATag(KIND, pubKey, dTag)
         }
 
         fun create(
@@ -151,10 +126,10 @@ class DraftEvent(
             onReady: (DraftEvent) -> Unit,
         ) {
             val tags = mutableListOf<Array<String>>()
-            originalNote.activity()?.let { tags.add(arrayOf("a", it.toTag(), "", "root")) }
-            originalNote.replyingTo()?.let { tags.add(arrayOf("e", it, "", "reply")) }
+            originalNote.activity()?.let { tags.add(arrayOf("a", it.toTag())) }
+            originalNote.replyingTo()?.let { tags.add(arrayOf("e", it)) }
 
-            create(dTag, originalNote, tags, signer, createdAt, onReady)
+            create(dTag, originalNote, emptyList(), signer, createdAt, onReady)
         }
 
         fun create(
@@ -195,18 +170,6 @@ class DraftEvent(
                 originalNote.tags().filter {
                     it.size > 3 && (it[0] == "e" || it[0] == "a") && (it[3] == "root" || it[3] == "reply")
                 }
-
-            create(dTag, originalNote, tagsWithMarkers, signer, createdAt, onReady)
-        }
-
-        fun create(
-            dTag: String,
-            originalNote: CommentEvent,
-            signer: NostrSigner,
-            createdAt: Long = TimeUtils.now(),
-            onReady: (DraftEvent) -> Unit,
-        ) {
-            val tagsWithMarkers = originalNote.getRootScopes() + originalNote.getDirectReplies()
 
             create(dTag, originalNote, tagsWithMarkers, signer, createdAt, onReady)
         }

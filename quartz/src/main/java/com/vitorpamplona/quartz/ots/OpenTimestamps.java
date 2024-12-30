@@ -379,8 +379,8 @@ public class OpenTimestamps {
 
         try {
             String blockHash = explorer.blockHash(height);
-            Log.i("OpenTimestamps", "Lite-client verification, assuming block " + blockHash + " is valid");
             blockInfo = explorer.block(blockHash);
+            Log.i("OpenTimestamps", "Lite-client verification, assuming block " + blockHash + " is valid");
         } catch (Exception e2) {
             e2.printStackTrace();
             throw e2;

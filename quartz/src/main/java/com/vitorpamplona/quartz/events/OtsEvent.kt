@@ -22,7 +22,6 @@ package com.vitorpamplona.quartz.events
 
 import android.util.Log
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.Stable
 import com.vitorpamplona.quartz.encoders.HexKey
 import com.vitorpamplona.quartz.encoders.hexToByteArray
 import com.vitorpamplona.quartz.ots.BlockstreamExplorer
@@ -31,32 +30,11 @@ import com.vitorpamplona.quartz.ots.DetachedTimestampFile
 import com.vitorpamplona.quartz.ots.Hash
 import com.vitorpamplona.quartz.ots.OpenTimestamps
 import com.vitorpamplona.quartz.ots.VerifyResult
-import com.vitorpamplona.quartz.ots.exceptions.UrlException
 import com.vitorpamplona.quartz.ots.op.OpSHA256
 import com.vitorpamplona.quartz.signers.NostrSigner
 import com.vitorpamplona.quartz.utils.TimeUtils
-import com.vitorpamplona.quartz.utils.pointerSizeInBytes
 import kotlinx.coroutines.CancellationException
 import java.util.Base64
-
-@Immutable
-sealed class VerificationState {
-    @Immutable object NotStarted : VerificationState()
-
-    @Stable
-    class Verified(
-        val verifiedTime: Long,
-    ) : VerificationState()
-
-    @Immutable class Error(
-        val errorMessage: String,
-    ) : VerificationState()
-
-    @Immutable class NetworkError(
-        val errorMessage: String,
-        val time: Long = TimeUtils.now(),
-    ) : VerificationState()
-}
 
 @Immutable
 class OtsEvent(
@@ -68,11 +46,7 @@ class OtsEvent(
     sig: HexKey,
 ) : Event(id, pubKey, createdAt, KIND, tags, content, sig) {
     @Transient
-    var verification: VerificationState = VerificationState.NotStarted
-
-    override fun countMemory(): Long =
-        super.countMemory() +
-            pointerSizeInBytes + Long.SIZE_BYTES // verifiedTime
+    var verifiedTime: Long? = null
 
     override fun isContentEncoded() = true
 
@@ -80,26 +54,22 @@ class OtsEvent(
 
     fun digest() = digestEvent()?.hexToByteArray()
 
-    fun otsByteArray(): ByteArray = Base64.getDecoder().decode(content)
+    fun otsByteArray(): ByteArray {
+        return Base64.getDecoder().decode(content)
+    }
 
-    fun cacheVerify(): VerificationState =
-        when (val verif = verification) {
-            is VerificationState.Verified -> verif
-            is VerificationState.NotStarted -> verifyState().also { verification = it }
-            is VerificationState.NetworkError -> {
-                // try again in 5 mins
-                if (verif.time < TimeUtils.fiveMinutesAgo()) {
-                    verifyState().also { verification = it }
-                } else {
-                    verif
-                }
-            }
-            is VerificationState.Error -> verif
+    fun cacheVerify(): Long? {
+        return if (verifiedTime != null) {
+            verifiedTime
+        } else {
+            verifiedTime = verify()
+            verifiedTime
         }
+    }
 
-    fun verifyState(): VerificationState = digestEvent()?.let { verify(otsByteArray(), it) } ?: VerificationState.Error("Digest Not found")
-
-    fun verify(): Long? = (verifyState() as? VerificationState.Verified)?.verifiedTime
+    fun verify(): Long? {
+        return digestEvent()?.let { OtsEvent.verify(otsByteArray(), it) }
+    }
 
     fun info(): String {
         val detachedOts = DetachedTimestampFile.deserialize(otsByteArray())
@@ -128,7 +98,7 @@ class OtsEvent(
 
             return if (otsInstance.upgrade(detachedOts)) {
                 // if the change is now verifiable.
-                if (verify(detachedOts, eventId) is VerificationState.Verified) {
+                if (verify(detachedOts, eventId) != null) {
                     Base64.getEncoder().encodeToString(detachedOts.serialize())
                 } else {
                     otsFile
@@ -141,37 +111,32 @@ class OtsEvent(
         fun verify(
             otsFile: String,
             eventId: HexKey,
-        ): VerificationState = verify(Base64.getDecoder().decode(otsFile), eventId)
+        ): Long? {
+            return verify(Base64.getDecoder().decode(otsFile), eventId)
+        }
 
         fun verify(
             otsFile: ByteArray,
             eventId: HexKey,
-        ): VerificationState = verify(DetachedTimestampFile.deserialize(otsFile), eventId)
+        ): Long? {
+            return verify(DetachedTimestampFile.deserialize(otsFile), eventId)
+        }
 
         fun verify(
             detachedOts: DetachedTimestampFile,
             eventId: HexKey,
-        ): VerificationState {
+        ): Long? {
             try {
                 val result = otsInstance.verify(detachedOts, eventId.hexToByteArray())
                 if (result == null || result.isEmpty()) {
-                    return VerificationState.Error("Verification hashmap is empty")
+                    return null
                 } else {
-                    val time = result.get(VerifyResult.Chains.BITCOIN)?.timestamp
-                    return if (time != null) {
-                        VerificationState.Verified(time)
-                    } else {
-                        VerificationState.Error("Does not include a Bitcoin verification")
-                    }
+                    return result.get(VerifyResult.Chains.BITCOIN)?.timestamp
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Log.e("OpenTimeStamps", "Failed to verify", e)
-                return if (e is UrlException) {
-                    VerificationState.NetworkError(e.message ?: e.cause?.message ?: "Failed to verify")
-                } else {
-                    VerificationState.Error(e.message ?: e.cause?.message ?: "Failed to verify")
-                }
+                return null
             }
         }
 

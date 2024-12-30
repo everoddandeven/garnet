@@ -25,7 +25,6 @@ import com.linkedin.urls.detection.UrlDetector
 import com.linkedin.urls.detection.UrlDetectorOptions
 import com.vitorpamplona.quartz.encoders.ATag
 import com.vitorpamplona.quartz.encoders.HexKey
-import com.vitorpamplona.quartz.encoders.IMetaTag
 import com.vitorpamplona.quartz.encoders.Nip92MediaAttachments
 import com.vitorpamplona.quartz.signers.NostrSigner
 import com.vitorpamplona.quartz.utils.TimeUtils
@@ -53,11 +52,12 @@ class TextNoteEvent(
             zapReceiver: List<ZapSplitSetup>? = null,
             markAsSensitive: Boolean = false,
             zapRaiserAmount: Long? = null,
+            tipReceiver: List<TipSplitSetup>? = null,
             replyingTo: String? = null,
             root: String? = null,
             directMentions: Set<HexKey> = emptySet(),
             geohash: String? = null,
-            imetas: List<IMetaTag>? = null,
+            nip94attachments: List<FileHeaderEvent>? = null,
             forkedFrom: Event? = null,
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
@@ -86,11 +86,6 @@ class TextNoteEvent(
             replyTos?.forEach {
                 if (it in directMentions) {
                     tags.add(arrayOf("q", it))
-                }
-            }
-            addresses?.forEach {
-                if (it.toTag() in directMentions) {
-                    tags.add(arrayOf("q", it.toTag()))
                 }
             }
             addresses
@@ -122,9 +117,20 @@ class TextNoteEvent(
                 tags.add(arrayOf("content-warning", ""))
             }
             zapRaiserAmount?.let { tags.add(arrayOf("zapraiser", "$it")) }
+            tipReceiver?.forEach {
+                if (it.isAddress) {
+                    tags.add(arrayOf("monero", it.addressOrPubKeyHex, it.weight.toString()))
+                } else {
+                    tags.add(arrayOf("monero", it.addressOrPubKeyHex, it.relay ?: "", it.weight.toString()))
+                }
+            }
             geohash?.let { tags.addAll(geohashMipMap(it)) }
-            imetas?.forEach {
-                tags.add(Nip92MediaAttachments.createTag(it))
+            nip94attachments?.let {
+                it.forEach {
+                    Nip92MediaAttachments().convertFromFileHeader(it)?.let {
+                        tags.add(it)
+                    }
+                }
             }
 
             if (isDraft) {
@@ -136,7 +142,9 @@ class TextNoteEvent(
     }
 }
 
-fun findURLs(text: String): List<String> = UrlDetector(text, UrlDetectorOptions.Default).detect().map { it.originalUrl }
+fun findURLs(text: String): List<String> {
+    return UrlDetector(text, UrlDetectorOptions.Default).detect().map { it.originalUrl }
+}
 
 /**
  * Returns a list of NIP-10 marked tags that are also ordered at best effort to support the
@@ -163,12 +171,13 @@ fun List<String>.positionalMarkedTags(
         o2 == replyingTo -> -1 // reply event being responded to goes last
         else -> 0 // keep the relative order for any other tag
     }
-}.map {
-    when (it) {
-        root -> arrayOf(tagName, it, "", "root")
-        replyingTo -> arrayOf(tagName, it, "", "reply")
-        forkedFrom -> arrayOf(tagName, it, "", "fork")
-        in directMentions -> arrayOf(tagName, it, "", "mention")
-        else -> arrayOf(tagName, it)
-    }
 }
+    .map {
+        when (it) {
+            root -> arrayOf(tagName, it, "", "root")
+            replyingTo -> arrayOf(tagName, it, "", "reply")
+            forkedFrom -> arrayOf(tagName, it, "", "fork")
+            in directMentions -> arrayOf(tagName, it, "", "mention")
+            else -> arrayOf(tagName, it)
+        }
+    }

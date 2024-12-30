@@ -54,16 +54,18 @@ class ChannelCreateEvent(
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
             onReady: (ChannelCreateEvent) -> Unit,
-        ) = create(
-            ChannelData(
-                name,
-                about,
-                picture,
-            ),
-            signer,
-            createdAt,
-            onReady,
-        )
+        ) {
+            return create(
+                ChannelData(
+                    name,
+                    about,
+                    picture,
+                ),
+                signer,
+                createdAt,
+                onReady,
+            )
+        }
 
         fun create(
             channelInfo: ChannelData?,
@@ -92,9 +94,5 @@ class ChannelCreateEvent(
         }
     }
 
-    @Immutable data class ChannelData(
-        val name: String?,
-        val about: String?,
-        val picture: String?,
-    )
+    @Immutable data class ChannelData(val name: String?, val about: String?, val picture: String?)
 }

@@ -30,13 +30,9 @@ import com.vitorpamplona.quartz.encoders.HexKey
 import com.vitorpamplona.quartz.encoders.decodePublicKey
 import com.vitorpamplona.quartz.encoders.toHexKey
 import com.vitorpamplona.quartz.signers.NostrSigner
-import com.vitorpamplona.quartz.signers.NostrSignerSync
 import com.vitorpamplona.quartz.utils.TimeUtils
 
-@Immutable data class Contact(
-    val pubKeyHex: String,
-    val relayUri: String?,
-)
+@Immutable data class Contact(val pubKeyHex: String, val relayUri: String?)
 
 @Stable
 class ContactListEvent(
@@ -47,43 +43,48 @@ class ContactListEvent(
     content: String,
     sig: HexKey,
 ) : Event(id, pubKey, createdAt, KIND, tags, content, sig) {
-    /**
-     * Returns a list of p-tags that are verified as hex keys.
-     */
-    fun verifiedFollowKeySet(): Set<HexKey> =
-        tags.mapNotNullTo(mutableSetOf()) {
-            if (it.size > 1 && it[0] == "p") {
-                try {
-                    decodePublicKey(it[1]).toHexKey()
-                } catch (e: Exception) {
-                    Log.w("ContactListEvent", "Can't parse p-tag $it in the contact list of $pubKey with id $id", e)
-                    null
-                }
-            } else {
-                null
-            }
-        }
+    // This function is only used by the user logged in
+    // But it is used all the time.
 
-    /**
-     * Returns a list of a-tags that are verified as correct.
-     */
-    fun verifiedFollowAddressSet(): Set<HexKey> =
-        tags
-            .mapNotNullTo(mutableSetOf()) {
-                if (it.size > 1 && it[0] == "a") {
-                    ATag.parse(it[1], null)?.toTag()
+    @delegate:Transient
+    val verifiedFollowKeySet: Set<HexKey> by lazy {
+        tags.mapNotNullTo(HashSet()) {
+            try {
+                if (it.size > 1 && it[0] == "p") {
+                    decodePublicKey(it[1]).toHexKey()
                 } else {
                     null
                 }
+            } catch (e: Exception) {
+                Log.w("ContactListEvent", "Can't parse tags as a follows: ${it[1]}", e)
+                null
             }
+        }
+    }
+
+    @delegate:Transient
+    val verifiedFollowTagSet: Set<String> by lazy {
+        unverifiedFollowTagSet().map { it.lowercase() }.toSet()
+    }
+
+    @delegate:Transient
+    val verifiedFollowGeohashSet: Set<String> by lazy {
+        unverifiedFollowGeohashSet().map { it.lowercase() }.toSet()
+    }
+
+    @delegate:Transient
+    val verifiedFollowCommunitySet: Set<String> by lazy { unverifiedFollowAddressSet().toSet() }
+
+    @delegate:Transient
+    val verifiedFollowKeySetAndMe: Set<HexKey> by lazy { verifiedFollowKeySet + pubKey }
 
     fun unverifiedFollowKeySet() = tags.filter { it.size > 1 && it[0] == "p" }.mapNotNull { it.getOrNull(1) }
 
     fun unverifiedFollowTagSet() = tags.filter { it.size > 1 && it[0] == "t" }.mapNotNull { it.getOrNull(1) }
 
-    fun countFollowTags() = tags.count { it.size > 1 && it[0] == "t" }
-
     fun unverifiedFollowGeohashSet() = tags.filter { it.size > 1 && it[0] == "g" }.mapNotNull { it.getOrNull(1) }
+
+    fun unverifiedFollowAddressSet() = tags.filter { it.size > 1 && it[0] == "a" }.mapNotNull { it.getOrNull(1) }
 
     fun follows() =
         tags.mapNotNull {
@@ -99,7 +100,7 @@ class ContactListEvent(
             }
         }
 
-    fun followsTags() = hashtags()
+    fun followsTags() = tags.filter { it.size > 1 && it[0] == "t" }.mapNotNull { it.getOrNull(1) }
 
     fun relays(): Map<String, ReadWrite>? =
         try {
@@ -116,38 +117,6 @@ class ContactListEvent(
     companion object {
         const val KIND = 3
         const val ALT = "Follow List"
-
-        fun blockListFor(pubKeyHex: HexKey): String = "3:$pubKeyHex:"
-
-        fun createFromScratch(
-            followUsers: List<Contact> = emptyList(),
-            followTags: List<String> = emptyList(),
-            followGeohashes: List<String> = emptyList(),
-            followCommunities: List<ATag> = emptyList(),
-            followEvents: List<String> = emptyList(),
-            relayUse: Map<String, ReadWrite>? = emptyMap(),
-            signer: NostrSignerSync,
-            createdAt: Long = TimeUtils.now(),
-        ): ContactListEvent? {
-            val content =
-                if (relayUse != null) {
-                    mapper.writeValueAsString(relayUse)
-                } else {
-                    ""
-                }
-
-            val tags =
-                listOf(arrayOf("alt", ALT)) +
-                    followUsers.map {
-                        listOfNotNull("p", it.pubKeyHex, it.relayUri).toTypedArray()
-                    } +
-                    followTags.map { arrayOf("t", it) } +
-                    followEvents.map { arrayOf("e", it) } +
-                    followCommunities.map { it.toATagArray() } +
-                    followGeohashes.map { arrayOf("g", it) }
-
-            return signer.sign(createdAt, KIND, tags.toTypedArray(), content)
-        }
 
         fun createFromScratch(
             followUsers: List<Contact>,
@@ -177,7 +146,13 @@ class ContactListEvent(
                 } +
                     followTags.map { arrayOf("t", it) } +
                     followEvents.map { arrayOf("e", it) } +
-                    followCommunities.map { it.toATagArray() } +
+                    followCommunities.map {
+                        if (it.relay != null) {
+                            arrayOf("a", it.toTag(), it.relay)
+                        } else {
+                            arrayOf("a", it.toTag())
+                        }
+                    } +
                     followGeohashes.map { arrayOf("g", it) }
 
             return create(
@@ -414,17 +389,12 @@ class ContactListEvent(
         }
     }
 
-    data class ReadWrite(
-        val read: Boolean,
-        val write: Boolean,
-    )
+    data class ReadWrite(val read: Boolean, val write: Boolean)
 }
 
 @Stable
 class UserMetadata {
     var name: String? = null
-
-    @Deprecated("Use name instead", replaceWith = ReplaceWith("name"))
     var username: String? = null
 
     @JsonProperty("display_name")
@@ -434,7 +404,6 @@ class UserMetadata {
     var website: String? = null
     var about: String? = null
     var bot: Boolean? = null
-    var pronouns: String? = null
 
     var nip05: String? = null
     var nip05Verified: Boolean = false
@@ -444,29 +413,45 @@ class UserMetadata {
     var lud06: String? = null
     var lud16: String? = null
 
+    @JsonProperty("cryptocurrency_addresses")
+    var cryptoAddresses: Map<String, String>? = null
+
     var twitter: String? = null
 
     @Transient
     var tags: ImmutableListOfLists<String>? = null
 
-    fun anyName(): String? = displayName ?: name ?: username
+    fun anyName(): String? {
+        return displayName ?: name ?: username
+    }
 
-    fun anyNameStartsWith(prefix: String): Boolean =
-        listOfNotNull(name, username, displayName, nip05, lud06, lud16).any {
+    fun anyNameStartsWith(prefix: String): Boolean {
+        return listOfNotNull(name, username, displayName, nip05, lud06, lud16).any {
             it.contains(prefix, true)
         }
+    }
 
-    fun lnAddress(): String? = lud16 ?: lud06
+    fun lnAddress(): String? {
+        return lud16 ?: lud06
+    }
 
-    fun bestName(): String? = displayName ?: name ?: username
+    fun moneroAddress(): String? {
+        return cryptoAddresses?.get("monero")
+    }
 
-    fun nip05(): String? = nip05
+    fun bestName(): String? {
+        return displayName ?: name ?: username
+    }
 
-    fun profilePicture(): String? = picture
+    fun nip05(): String? {
+        return nip05
+    }
+
+    fun profilePicture(): String? {
+        return picture
+    }
 
     fun cleanBlankNames() {
-        if (pronouns == "null") pronouns = null
-
         if (picture?.isNotEmpty() == true) picture = picture?.trim()
         if (nip05?.isNotEmpty() == true) nip05 = nip05?.trim()
         if (displayName?.isNotEmpty() == true) displayName = displayName?.trim()
@@ -474,7 +459,6 @@ class UserMetadata {
         if (username?.isNotEmpty() == true) username = username?.trim()
         if (lud06?.isNotEmpty() == true) lud06 = lud06?.trim()
         if (lud16?.isNotEmpty() == true) lud16 = lud16?.trim()
-        if (pronouns?.isNotEmpty() == true) pronouns = pronouns?.trim()
 
         if (banner?.isNotEmpty() == true) banner = banner?.trim()
         if (website?.isNotEmpty() == true) website = website?.trim()
@@ -491,14 +475,13 @@ class UserMetadata {
         if (banner?.isBlank() == true) banner = null
         if (website?.isBlank() == true) website = null
         if (domain?.isBlank() == true) domain = null
-        if (pronouns?.isBlank() == true) pronouns = null
     }
 }
 
-@Stable class ImmutableListOfLists<T>(
-    val lists: Array<Array<T>>,
-)
+@Stable class ImmutableListOfLists<T>(val lists: Array<Array<T>>)
 
 val EmptyTagList = ImmutableListOfLists<String>(emptyArray())
 
-fun Array<Array<String>>.toImmutableListOfLists(): ImmutableListOfLists<String> = ImmutableListOfLists(this)
+fun Array<Array<String>>.toImmutableListOfLists(): ImmutableListOfLists<String> {
+    return ImmutableListOfLists(this)
+}

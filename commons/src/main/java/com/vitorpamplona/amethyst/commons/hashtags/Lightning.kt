@@ -193,7 +193,8 @@ public val CustomHashTagIcons.Lightning: ImageVector
                     lineTo(276.0f, 279.0f)
                     close()
                 }
-            }.build()
+            }
+                .build()
         return customHashTagIconsLightning!!
     }
 

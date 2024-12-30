@@ -681,15 +681,16 @@ class RichTextParserTest {
 
         🕵️ @nostrin "The Nostr Inspector"
         npub17m7f7q08k4x746s2v45eyvwppck32dcahw7uj2mu5txuswldgqkqw9zms7
-        """.trimIndent()
+        """
+            .trimIndent()
 
     @Test
     fun testTextToParse() {
         val state =
             RichTextParser()
-                .parseText(textToParse, EmptyTagList, null)
+                .parseText(textToParse, EmptyTagList)
         org.junit.Assert.assertEquals(
-            "relay.shitforce.one, relayable.org, universe.nostrich.land, nos.lol, universe.nostrich.land?lang=zh, universe.nostrich.land?lang=en, relay.damus.io, relay.nostr.wirednet.jp, offchain.pub, nostr.rocks, relay.wellorder.net, nostr.oxtr.dev, universe.nostrich.land?lang=ja, relay.mostr.pub, nostr.bitcoiner.social, Nostr-Check.com, MR.Rabbit, Ancap.su, ⚡\uFE0Fsatscoinsv@getalby.com, miceliomad@miceliomad.github.io/nostr/, zapper.lol, smies.me, baller.hodl",
+            "relay.shitforce.one, relayable.org, universe.nostrich.land, nos.lol, universe.nostrich.land?lang=zh, universe.nostrich.land?lang=en, relay.damus.io, relay.nostr.wirednet.jp, offchain.pub, nostr.rocks, relay.wellorder.net, nostr.oxtr.dev, universe.nostrich.land?lang=ja, relay.mostr.pub, nostr.bitcoiner.social, Nostr-Check.com, MR.Rabbit, Ancap.su, zapper.lol, smies.me, baller.hodl",
             state.urlSet.joinToString(", "),
         )
 
@@ -2257,7 +2258,7 @@ class RichTextParserTest {
                 "HashTag(#214)",
                 "RegularText(2%)",
                 "RegularText(Satscoinsv,)",
-                "Link(⚡️satscoinsv@getalby.com)",
+                "RegularText(⚡️satscoinsv@getalby.com)",
                 "RegularText(-)",
                 "RegularText(80db64657ea0358c5332c5cca01565eeddd4b8799688b1c46d3cb2d7c966671f)",
                 "HashTag(#215)",
@@ -2467,7 +2468,7 @@ class RichTextParserTest {
                 "HashTag(#249)",
                 "RegularText(2%)",
                 "RegularText(micmad,)",
-                "Link(miceliomad@miceliomad.github.io/nostr/)",
+                "RegularText(miceliomad@miceliomad.github.io/nostr/)",
                 "RegularText(-)",
                 "RegularText(cd806edcf8ff40ea94fa574ea9cd97da16e5beb2b85aac6e1d648b8388504343)",
                 "HashTag(#250)",
@@ -4036,25 +4037,21 @@ class RichTextParserTest {
     fun testShortTextToParse() {
         val state =
             RichTextParser()
-                .parseText("Hi, how are you doing? ", EmptyTagList, null)
+                .parseText("Hi, how are you doing? ", EmptyTagList)
         org.junit.Assert.assertTrue(state.urlSet.isEmpty())
         org.junit.Assert.assertTrue(state.imagesForPager.isEmpty())
         org.junit.Assert.assertTrue(state.imageList.isEmpty())
         org.junit.Assert.assertTrue(state.customEmoji.isEmpty())
         org.junit.Assert.assertEquals(
             "Hi, how are you doing? ",
-            state.paragraphs
-                .firstOrNull()
-                ?.words
-                ?.firstOrNull()
-                ?.segmentText,
+            state.paragraphs.firstOrNull()?.words?.firstOrNull()?.segmentText,
         )
     }
 
     @Test
     fun testShortNewLinesTextToParse() {
         val state =
-            RichTextParser().parseText("\nHi, \nhow\n\n\n are you doing? \n", EmptyTagList, null)
+            RichTextParser().parseText("\nHi, \nhow\n\n\n are you doing? \n", EmptyTagList)
         org.junit.Assert.assertTrue(state.urlSet.isEmpty())
         org.junit.Assert.assertTrue(state.imagesForPager.isEmpty())
         org.junit.Assert.assertTrue(state.imageList.isEmpty())
@@ -4074,11 +4071,12 @@ class RichTextParserTest {
             See how it can be done here: https://lnshort.it/live-stream-embeds/
 
             https://nostr.build/i/fd53fcf5ad950fbe45127e4bcee1b59e8301d41de6beee211f45e344db214e8a.jpg
-            """.trimIndent()
+            """
+                .trimIndent()
 
         val state =
             RichTextParser()
-                .parseText(text, EmptyTagList, null)
+                .parseText(text, EmptyTagList)
         org.junit.Assert.assertEquals(
             "https://lnshort.it/live-stream-embeds/",
             state.urlSet.firstOrNull(),
@@ -4155,7 +4153,7 @@ class RichTextParserTest {
 
         val state =
             RichTextParser()
-                .parseText(text, EmptyTagList, null)
+                .parseText(text, EmptyTagList)
 
         printStateForDebug(state)
 
@@ -4188,7 +4186,7 @@ class RichTextParserTest {
 
         val state =
             RichTextParser()
-                .parseText(text, EmptyTagList, null)
+                .parseText(text, EmptyTagList)
 
         printStateForDebug(state)
 
@@ -4214,45 +4212,12 @@ class RichTextParserTest {
     }
 
     @Test
-    fun testAVif() {
-        val text =
-            "Goon Night everybody :sleep:\n" +
-                "81ca16-b665-4f57-80cb-11a58461fb61.avif\n" +
-                "\n" +
-                "https://bae.st/media/66b08dde784287ed8f92c455bc62076a04671ccb44097550626a532185a5d3ed.avif?name=81ca16-b665-4f57-80cb-11a58461fb61.avif"
-
-        val state =
-            RichTextParser()
-                .parseText(text, EmptyTagList, null)
-
-        printStateForDebug(state)
-
-        val expectedResult =
-            listOf<String>(
-                "RegularText(Goon Night everybody :sleep:)",
-                "Image(81ca16-b665-4f57-80cb-11a58461fb61.avif)",
-                "RegularText()",
-                "Image(https://bae.st/media/66b08dde784287ed8f92c455bc62076a04671ccb44097550626a532185a5d3ed.avif?name=81ca16-b665-4f57-80cb-11a58461fb61.avif)",
-            )
-
-        state.paragraphs
-            .map { it.words }
-            .flatten()
-            .forEachIndexed { index, seg ->
-                org.junit.Assert.assertEquals(
-                    expectedResult[index],
-                    "${seg.javaClass.simpleName.replace("Segment", "")}(${seg.segmentText})",
-                )
-            }
-    }
-
-    @Test
     fun testUrlsEndingInPeriod() {
         val text = "That’s it! http://vitorpamplona.com/. That’s the note"
 
         val state =
             RichTextParser()
-                .parseText(text, EmptyTagList, null)
+                .parseText(text, EmptyTagList)
 
         printStateForDebug(state)
 
@@ -4293,7 +4258,7 @@ class RichTextParserTest {
                 "https://misskey.io/play/9g3qza4jow"
 
         val state =
-            RichTextParser().parseText(text, ImmutableListOfLists(tags), null)
+            RichTextParser().parseText(text, ImmutableListOfLists(tags))
 
         printStateForDebug(state)
 

@@ -21,10 +21,8 @@
 package com.vitorpamplona.quartz.events
 
 import androidx.compose.runtime.Immutable
-import com.vitorpamplona.quartz.encoders.ATag
 import com.vitorpamplona.quartz.encoders.HexKey
 import com.vitorpamplona.quartz.signers.NostrSigner
-import com.vitorpamplona.quartz.signers.NostrSignerSync
 import com.vitorpamplona.quartz.utils.TimeUtils
 
 @Immutable
@@ -38,8 +36,8 @@ class AdvertisedRelayListEvent(
 ) : BaseAddressableEvent(id, pubKey, createdAt, KIND, tags, content, sig) {
     override fun dTag() = FIXED_D_TAG
 
-    fun relays(): List<AdvertisedRelayInfo> =
-        tags.mapNotNull {
+    fun relays(): List<AdvertisedRelayInfo> {
+        return tags.mapNotNull {
             if (it.size > 1 && it[0] == "r") {
                 val type =
                     when (it.getOrNull(2)) {
@@ -53,115 +51,39 @@ class AdvertisedRelayListEvent(
                 null
             }
         }
-
-    fun readRelays(): List<String>? =
-        tags
-            .mapNotNull {
-                if (it.size > 1 && it[0] == "r") {
-                    when (it.getOrNull(2)) {
-                        "read" -> it[1]
-                        "write" -> null
-                        else -> it[1]
-                    }
-                } else {
-                    null
-                }
-            }.ifEmpty { null }
-
-    fun writeRelays(): List<String> =
-        tags.mapNotNull {
-            if (it.size > 1 && it[0] == "r") {
-                when (it.getOrNull(2)) {
-                    "read" -> null
-                    "write" -> it[1]
-                    else -> it[1]
-                }
-            } else {
-                null
-            }
-        }
+    }
 
     companion object {
         const val KIND = 10002
         const val FIXED_D_TAG = ""
-        const val ALT = "Relay list to discover the user's content"
 
-        fun createAddressATag(pubKey: HexKey): ATag = ATag(KIND, pubKey, FIXED_D_TAG, null)
-
-        fun createAddressTag(pubKey: HexKey): String = ATag.assembleATag(KIND, pubKey, FIXED_D_TAG)
-
-        fun updateRelayList(
-            earlierVersion: AdvertisedRelayListEvent,
-            relays: List<AdvertisedRelayInfo>,
+        fun create(
+            list: List<AdvertisedRelayInfo>,
             signer: NostrSigner,
             createdAt: Long = TimeUtils.now(),
             onReady: (AdvertisedRelayListEvent) -> Unit,
         ) {
             val tags =
-                earlierVersion.tags
-                    .filter { it[0] != "r" }
-                    .plus(
-                        relays.map(::createRelayTag),
-                    ).toTypedArray()
-
-            signer.sign(createdAt, KIND, tags, earlierVersion.content, onReady)
-        }
-
-        fun createFromScratch(
-            relays: List<AdvertisedRelayInfo>,
-            signer: NostrSigner,
-            createdAt: Long = TimeUtils.now(),
-            onReady: (AdvertisedRelayListEvent) -> Unit,
-        ) {
-            create(relays, signer, createdAt, onReady)
-        }
-
-        fun createRelayTag(relay: AdvertisedRelayInfo): Array<String> =
-            if (relay.type == AdvertisedRelayType.BOTH) {
-                arrayOf("r", relay.relayUrl)
-            } else {
-                arrayOf("r", relay.relayUrl, relay.type.code)
-            }
-
-        fun createTagArray(relays: List<AdvertisedRelayInfo>): Array<Array<String>> =
-            relays
-                .map(::createRelayTag)
-                .plusElement(arrayOf("alt", ALT))
-                .toTypedArray()
-
-        fun create(
-            list: List<AdvertisedRelayInfo>,
-            signer: NostrSigner,
-            createdAt: Long = TimeUtils.now(),
-            onReady: (AdvertisedRelayListEvent) -> Unit,
-        ) {
-            val tags = createTagArray(list)
+                list
+                    .map {
+                        if (it.type == AdvertisedRelayType.BOTH) {
+                            arrayOf(it.relayUrl)
+                        } else {
+                            arrayOf(it.relayUrl, it.type.code)
+                        }
+                    }
+                    .plusElement(arrayOf("alt", "Relay list event with ${list.size} relays"))
+                    .toTypedArray()
             val msg = ""
 
             signer.sign(createdAt, KIND, tags, msg, onReady)
         }
-
-        fun create(
-            list: List<AdvertisedRelayInfo>,
-            signer: NostrSignerSync,
-            createdAt: Long = TimeUtils.now(),
-        ): AdvertisedRelayListEvent? {
-            val tags = createTagArray(list)
-            val msg = ""
-
-            return signer.sign(createdAt, KIND, tags, msg)
-        }
     }
 
-    @Immutable data class AdvertisedRelayInfo(
-        val relayUrl: String,
-        val type: AdvertisedRelayType,
-    )
+    @Immutable data class AdvertisedRelayInfo(val relayUrl: String, val type: AdvertisedRelayType)
 
     @Immutable
-    enum class AdvertisedRelayType(
-        val code: String,
-    ) {
+    enum class AdvertisedRelayType(val code: String) {
         BOTH(""),
         READ("read"),
         WRITE("write"),

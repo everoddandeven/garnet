@@ -29,8 +29,6 @@ import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import com.vitorpamplona.quartz.encoders.HexKey
 import com.vitorpamplona.quartz.signers.NostrSigner
 import com.vitorpamplona.quartz.utils.TimeUtils
-import com.vitorpamplona.quartz.utils.bytesUsedInMemory
-import com.vitorpamplona.quartz.utils.pointerSizeInBytes
 
 @Immutable
 class LnZapPaymentRequestEvent(
@@ -44,13 +42,11 @@ class LnZapPaymentRequestEvent(
     // Once one of an app user decrypts the payment, all users else can see it.
     @Transient private var lnInvoice: String? = null
 
-    override fun countMemory(): Long =
-        super.countMemory() +
-            pointerSizeInBytes + (lnInvoice?.bytesUsedInMemory() ?: 0) // rough calculation
-
     fun walletServicePubKey() = tags.firstOrNull { it.size > 1 && it[0] == "p" }?.get(1)
 
-    fun talkingWith(oneSideHex: String): HexKey = if (pubKey == oneSideHex) walletServicePubKey() ?: pubKey else pubKey
+    fun talkingWith(oneSideHex: String): HexKey {
+        return if (pubKey == oneSideHex) walletServicePubKey() ?: pubKey else pubKey
+    }
 
     fun lnInvoice(
         signer: NostrSigner,
@@ -62,7 +58,7 @@ class LnZapPaymentRequestEvent(
         }
 
         try {
-            signer.decrypt(content, talkingWith(signer.pubKey)) { jsonText ->
+            signer.nip04Decrypt(content, talkingWith(signer.pubKey)) { jsonText ->
                 val payInvoiceMethod = mapper.readValue(jsonText, Request::class.java)
 
                 lnInvoice = (payInvoiceMethod as? PayInvoiceMethod)?.params?.invoice
@@ -101,20 +97,16 @@ class LnZapPaymentRequestEvent(
 
 // REQUEST OBJECTS
 
-abstract class Request(
-    var method: String? = null,
-)
+abstract class Request(var method: String? = null)
 
 // PayInvoice Call
-class PayInvoiceParams(
-    var invoice: String? = null,
-)
+class PayInvoiceParams(var invoice: String? = null)
 
-class PayInvoiceMethod(
-    var params: PayInvoiceParams? = null,
-) : Request("pay_invoice") {
+class PayInvoiceMethod(var params: PayInvoiceParams? = null) : Request("pay_invoice") {
     companion object {
-        fun create(bolt11: String): PayInvoiceMethod = PayInvoiceMethod(PayInvoiceParams(bolt11))
+        fun create(bolt11: String): PayInvoiceMethod {
+            return PayInvoiceMethod(PayInvoiceParams(bolt11))
+        }
     }
 }
 

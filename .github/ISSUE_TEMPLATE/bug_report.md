@@ -24,12 +24,9 @@ A clear and concise description of what you expected to happen.
 If applicable, add a video and/or screenshots to help explain your problem.
 
 **Device (please complete the following information):**
- - Phone Brand/Model [e.g. Pixel 7 Pro]:
- - Android Version [e.g. 33]:
- - App Version [e.g. v0.20.3]:
- - Amber Version (if using it to sign):
+ - Phone Brand/Model [e.g. Pixel 7 Pro]: 
+ - Android Version [e.g. 33]: 
+ - App Version [e.g. v0.20.3]: 
 
-**Bounty (in Bitcoin sats) offered for a solution**
-The size of the bounty is proportional to how much this matters to you. If no bounty is offered,
-not even a small one, this bug will not be worked on because it doesn't matter to you. We prioritize
-bug fixing to issues that have bounties, even small ones.
+**Bounty (in XMR) offered for a solution**
+Incentivize developers to work on your issue. Describe clear milestones to claim payment.

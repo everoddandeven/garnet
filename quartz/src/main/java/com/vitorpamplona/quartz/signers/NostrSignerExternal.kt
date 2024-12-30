@@ -66,7 +66,8 @@ class NostrSignerExternal(
                         localEvent.content,
                         localEvent.sig,
                     ) as? T?
-                )?.let { onReady(it) }
+                )
+                    ?.let { onReady(it) }
             } else {
                 (
                     EventFactory.create(
@@ -78,7 +79,8 @@ class NostrSignerExternal(
                         event.content,
                         signature.split("-")[0],
                     ) as? T?
-                )?.let { onReady(it) }
+                )
+                    ?.let { onReady(it) }
             }
         }
     }

@@ -27,8 +27,6 @@ import com.vitorpamplona.quartz.encoders.HexKey
 import com.vitorpamplona.quartz.encoders.toHexKey
 import com.vitorpamplona.quartz.signers.NostrSigner
 import com.vitorpamplona.quartz.utils.TimeUtils
-import com.vitorpamplona.quartz.utils.bytesUsedInMemory
-import com.vitorpamplona.quartz.utils.pointerSizeInBytes
 
 @Immutable
 class SealedGossipEvent(
@@ -39,55 +37,49 @@ class SealedGossipEvent(
     content: String,
     sig: HexKey,
 ) : WrappedEvent(id, pubKey, createdAt, KIND, tags, content, sig) {
-    @Transient var innerEventId: HexKey? = null
-
-    override fun countMemory(): Long =
-        super.countMemory() +
-            pointerSizeInBytes + (innerEventId?.bytesUsedInMemory() ?: 0)
-
-    fun copyNoContent(): SealedGossipEvent {
-        val copy =
-            SealedGossipEvent(
-                id,
-                pubKey,
-                createdAt,
-                tags,
-                "",
-                sig,
-            )
-
-        copy.host = host
-        copy.innerEventId = innerEventId
-
-        return copy
-    }
+    @Transient private var cachedInnerEvent: Map<HexKey, Event?> = mapOf()
 
     override fun isContentEncoded() = true
 
-    @Deprecated(
-        message = "Heavy caching was removed from this class due to high memory use. Cache it separatedly",
-        replaceWith = ReplaceWith("unseal"),
-    )
+    fun preCachedGossip(signer: NostrSigner): Event? {
+        return cachedInnerEvent[signer.pubKey]
+    }
+
+    fun addToCache(
+        pubKey: HexKey,
+        gift: Event,
+    ) {
+        cachedInnerEvent = cachedInnerEvent + Pair(pubKey, gift)
+    }
+
     fun cachedGossip(
         signer: NostrSigner,
         onReady: (Event) -> Unit,
-    ) = unseal(signer, onReady)
+    ) {
+        cachedInnerEvent[signer.pubKey]?.let {
+            onReady(it)
+            return
+        }
 
-    fun unseal(
+        unseal(signer) { gossip ->
+            val event = gossip.mergeWith(this)
+            if (event is WrappedEvent) {
+                event.host = host ?: this
+            }
+            addToCache(signer.pubKey, event)
+
+            onReady(event)
+        }
+    }
+
+    private fun unseal(
         signer: NostrSigner,
-        onReady: (Event) -> Unit,
+        onReady: (Gossip) -> Unit,
     ) {
         try {
             plainContent(signer) {
                 try {
-                    val gossip = Gossip.fromJson(it)
-                    val event = gossip.mergeWith(this)
-                    if (event is WrappedEvent) {
-                        event.host = host ?: HostStub(this.id, this.pubKey, this.kind)
-                    }
-                    innerEventId = event.id
-
-                    onReady(event)
+                    onReady(Gossip.fromJson(it))
                 } catch (e: Exception) {
                     Log.w("GossipEvent", "Fail to decrypt or parse Gossip", e)
                 }
@@ -124,7 +116,7 @@ class SealedGossipEvent(
             gossip: Gossip,
             encryptTo: HexKey,
             signer: NostrSigner,
-            createdAt: Long = TimeUtils.randomWithTwoDays(),
+            createdAt: Long = TimeUtils.randomWithinAWeek(),
             onReady: (SealedGossipEvent) -> Unit,
         ) {
             val msg = Gossip.toJson(gossip)
@@ -145,7 +137,7 @@ class Gossip(
     val content: String?,
 ) {
     fun mergeWith(event: SealedGossipEvent): Event {
-        val newPubKey = event.pubKey // forces to be the pubkey of the seal to make sure impersonators don't impersonate
+        val newPubKey = pubKey?.ifBlank { null } ?: event.pubKey
         val newCreatedAt = if (createdAt != null && createdAt > 1000) createdAt else event.createdAt
         val newKind = kind ?: -1
         val newTags = (tags ?: emptyArray()).plus(event.tags)
@@ -163,6 +155,8 @@ class Gossip(
 
         fun toJson(event: Gossip): String = Event.mapper.writeValueAsString(event)
 
-        fun create(event: Event): Gossip = Gossip(event.id, event.pubKey, event.createdAt, event.kind, event.tags, event.content)
+        fun create(event: Event): Gossip {
+            return Gossip(event.id, event.pubKey, event.createdAt, event.kind, event.tags, event.content)
+        }
     }
 }
